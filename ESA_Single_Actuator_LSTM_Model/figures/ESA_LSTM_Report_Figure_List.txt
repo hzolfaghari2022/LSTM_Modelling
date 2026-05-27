@@ -20,3 +20,5 @@ Report-ready figures saved for Overleaf
 17. Fig17_LSTM_Model_Workflow.png
 18. Fig18_LSTM_Error_Metrics.png
 19. Fig19_LSTM_Parity_Plots.png
+20. Fig20_LSTM_Training_RMSE_History.png
+21. Fig21_LSTM_Training_Loss_History.png
