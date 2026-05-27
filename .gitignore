@@ -1,0 +1,11 @@
+# MATLAB Drive system files
+.MATLABDriveTag
+**/.MATLABDriveTag
+
+# MATLAB temporary and autosave files
+*.asv
+*.m~
+
+# Operating system files
+.DS_Store
+Thumbs.db
