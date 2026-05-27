@@ -1,0 +1,316 @@
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{longtable}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\setstretch{1.15}
+
+\newcommand{\figpath}{figures}
+\newcommand{\codefile}{ESA\_Single\_Actuator\_LSTM\_Model\_SSH\_GitHub.m}
+
+\begin{document}
+\title{\textbf{Single Actuator ESA Data Visualization and LSTM Dynamic Modeling Report}}
+\author{Hussein Zolfaghari}
+\date{\today}
+\maketitle
+
+\begin{abstract}
+This report summarizes the first data driven modeling step for a single electromagnetic soft actuator. The available COMSOL dataset contains the applied coil current, the electromagnetic force response, the weight or load force, and the actuator displacement. The main objective is to first present the data in a physically meaningful way, then train an initial Long Short Term Memory network that learns the actuator dynamic response from current history. The model is not intended to replace the full actuator network state space formulation at this stage. Instead, it provides a first input output model for one actuator, which can later be extended to multiple actuators and compared with physics based mass spring damper models.
+\end{abstract}
+
+\section{Purpose of This Report}
+
+The MATLAB script used in this study performs six main steps: it reads the COMSOL spreadsheet for one actuator, plots the main physical signals, trains a single actuator LSTM model, predicts displacement and coil force from current history, saves figures and model outputs, and optionally pushes the results to GitHub through SSH. The code is explicitly written for one actuator, not for the previous eighty actuator state space network. This distinction is important because the present dataset contains one current input, one force response, and one displacement response.
+
+The central modeling idea is that the LSTM learns the dynamic mapping
+\begin{equation}
+    I(1:k) \longrightarrow \left[z(k), F_c(k)\right],
+\end{equation}
+where \(I(1:k)\) is the current history up to time step \(k\), \(z(k)\) is the displacement, and \(F_c(k)\) is the electromagnetic coil force. This allows the model to represent actuator memory without explicitly writing the governing mass spring damper state equations.
+
+\section{Dataset Description}
+
+The synchronized dataset contains 501 samples from \(t=0\) s to \(t=0.4\) s. The mean sampling time is approximately \(0.0008\) s, or \(0.8\) ms. The current varies from \(0\) A to \(0.2\) A. The displacement varies from approximately \(-0.0537\) mm to \(7.2817\) mm, and the coil force varies from approximately \(-1.04 \times 10^{-4}\) N to \(9.9071 \times 10^{-2}\) N.
+
+\begin{table}[H]
+\centering
+\caption{Summary of synchronized single actuator data.}
+\begin{tabular}{ll}
+\toprule
+Quantity & Value \\
+\midrule
+Number of synchronized samples & 501 \\
+Time range & \(0\) to \(0.4\) s \\
+Mean sampling time & \(0.0008\) s \\
+Mean sampling time & \(0.8\) ms \\
+Current range & \(0\) to \(0.2\) A \\
+Displacement range & \(-0.0537\) to \(7.2817\) mm \\
+Coil force range & \(-1.04 \times 10^{-4}\) to \(9.9071 \times 10^{-2}\) N \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Data Cleaning and Synchronization}
+
+The COMSOL export contains separate sheets for displacement, force, and current. The displacement sheet uses metadata rows before the actual table header. After importing the data, the script renames the variables to consistent names:
+\[
+    t,\quad z,\quad F_c,\quad F_w,\quad I,
+\]
+where \(z\) is displacement, \(F_c\) is coil force, \(F_w\) is weight or load force, and \(I\) is current. Duplicate time stamps are removed by averaging the corresponding values at the same time. The data are sorted by time to avoid interpolation or plotting errors.
+
+The force time vector is selected as the common time grid. Current and displacement are interpolated onto this grid:
+\begin{equation}
+    I_{\mathrm{grid}}(t) = \mathrm{interp1}(t_I, I, t_F),
+\end{equation}
+\begin{equation}
+    z_{\mathrm{grid}}(t) = \mathrm{interp1}(t_z, z, t_F).
+\end{equation}
+The net force estimate is computed as
+\begin{equation}
+    F_{\mathrm{net}}(t) = F_c(t) - F_w(t).
+\end{equation}
+This synchronized form is used for combined plots and LSTM training.
+
+\section{Visualization Results}
+
+The first part of the script is intentionally focused on data understanding. This is necessary before training a model because the time scale, trigger region, sign convention, force response, and displacement behavior must all be physically meaningful.
+
+\subsection{Current Input}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig01_Current_Time.png}
+    \caption{Input current profile for the single ESA actuator. The current input provides the excitation history used as the LSTM input sequence.}
+\end{figure}
+
+\subsection{Force Response}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig02_CoilForce_Time.png}
+    \caption{Electromagnetic coil force response. This signal is one of the two outputs predicted by the LSTM model.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig03_Weight_Time.png}
+    \caption{Weight or load force. This signal is used to compute a net force estimate but is not selected as a direct LSTM output in the present model.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig04_NetForce_Time.png}
+    \caption{Net force estimate computed as coil force minus weight or load force.}
+\end{figure}
+
+\subsection{Displacement Response}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig05_Displacement_Time.png}
+    \caption{Z displacement response of the single ESA actuator. This signal is the main mechanical output predicted by the LSTM.}
+\end{figure}
+
+\subsection{Synchronized Signal Behavior}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig06_SynchronizedSignals_Time.png}
+    \caption{Synchronized current, coil force, and displacement on the common force time grid. This plot shows the relative timing of input excitation and mechanical response.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig07_TriggerZoom_0_30ms.png}
+    \caption{Early transient response from 0 to 30 ms. This zoomed view is important because the actuator is not expected to respond instantaneously at an unrealistic time scale.}
+\end{figure}
+
+\subsection{Input Output Relationships}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig08_Force_Current.png}
+    \caption{Coil force versus input current.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig09_Displacement_Current.png}
+    \caption{Displacement versus input current. This relation reflects the actuator dynamic behavior under the available input history.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig10_Force_Displacement.png}
+    \caption{Coil force versus displacement.}
+\end{figure}
+
+\section{Why an LSTM Model Was Used}
+
+The actuator response is dynamic. The displacement and force at a given time do not depend only on the current value of the input current. They also depend on the previous input history and the internal state of the system. In a physics based model, that memory is represented through states such as displacement and velocity in mass spring damper equations. In an LSTM model, the memory is represented by internal recurrent states that are learned from data.
+
+A standard feedforward neural network would map the instantaneous current to instantaneous outputs:
+\[
+    [z(k), F_c(k)] = f(I(k)).
+\]
+This is not sufficient for dynamic actuator behavior because the same current value can occur at different times with different displacement and force responses. The LSTM instead learns
+\[
+    [z(k), F_c(k)] = f_{\mathrm{LSTM}}\left(I(1), I(2), \ldots, I(k)\right).
+\]
+This makes it more appropriate for soft actuator modeling because soft actuators often exhibit memory, delayed response, damping, thermal effects, and time dependent deformation.
+
+\section{LSTM Model Structure}
+
+The implemented network is a sequence to sequence regression model. The input sequence has one feature: the coil current. The output sequence has two features: displacement and coil force. The architecture is:
+\[
+\text{Current input} \rightarrow \text{LSTM layer} \rightarrow \text{fully connected layer} \rightarrow \text{ReLU} \rightarrow \text{fully connected output layer}.
+\]
+
+The model settings are summarized below.
+
+\begin{table}[H]
+\centering
+\caption{LSTM training settings.}
+\begin{tabular}{ll}
+\toprule
+Setting & Value \\
+\midrule
+Input feature & Current \(I\) in A \\
+Output features & Displacement \(z\) in mm, coil force \(F_c\) in N \\
+Training ratio & 75 percent of the time history \\
+Testing ratio & 25 percent of the time history \\
+LSTM hidden units & 64 \\
+Maximum epochs & 600 \\
+Optimizer & Adam \\
+Initial learning rate & \(10^{-3}\) \\
+Mini batch size & 1 sequence \\
+Gradient threshold & 1.0 \\
+Shuffle setting & Never \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Normalization}
+
+Before training, the input and output data are normalized using statistics computed only from the training portion:
+\begin{equation}
+    \tilde{X} = \frac{X - \mu_X}{\sigma_X},
+\end{equation}
+\begin{equation}
+    \tilde{Y} = \frac{Y - \mu_Y}{\sigma_Y}.
+\end{equation}
+This is important because displacement is measured in millimeters, force is measured in Newtons, and current is measured in amperes. These quantities have different numerical scales. Normalization prevents the training process from being dominated by the variable with the largest numerical magnitude.
+
+\section{Training and Testing Method}
+
+The first 75 percent of the time history is used for training and the remaining 25 percent is used for testing. This split was selected because the signal is a time sequence. Shuffling the time points would destroy the causal order of the actuator response. Therefore, the model sees the early part of the response during training and is evaluated on the later part.
+
+The input and output sequences are arranged in the MATLAB sequence format:
+\[
+    X \in \mathbb{R}^{1 \times T}, \qquad Y \in \mathbb{R}^{2 \times T}.
+\]
+Here, \(T\) is the number of time samples. The input dimension is one because there is one current signal. The output dimension is two because the network predicts displacement and coil force.
+
+\section{Prediction Results}
+
+After training, the LSTM model predicts the full time history. The normalized predictions are transformed back to physical units using the saved normalization parameters. The model predictions are compared with the COMSOL data.
+
+\begin{table}[H]
+\centering
+\caption{Single actuator LSTM prediction accuracy.}
+\begin{tabular}{lll}
+\toprule
+Output & Training RMSE & Testing RMSE \\
+\midrule
+Displacement & \(0.0370165\) mm & \(0.00503445\) mm \\
+Coil force & \(7.43668 \times 10^{-4}\) N & \(8.65539 \times 10^{-5}\) N \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The small testing errors indicate that the trained model follows the response well for this specific input case. However, because this first dataset contains only one current excitation profile, the model should be interpreted as an initial proof of concept rather than a fully general actuator model.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig11_LSTM_Displacement_Prediction.png}
+    \caption{LSTM displacement prediction compared with the COMSOL displacement signal.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig12_LSTM_Force_Prediction.png}
+    \caption{LSTM coil force prediction compared with the COMSOL coil force signal.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig13_LSTM_Prediction_Errors.png}
+    \caption{Prediction errors for displacement and coil force. The error is defined as COMSOL data minus LSTM prediction.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{\figpath/Fig14_LSTM_TriggerZoom.png}
+    \caption{Early transient comparison between current input, COMSOL displacement, and LSTM displacement prediction.}
+\end{figure}
+
+\section{Interpretation of the Results}
+
+The LSTM model reproduces the displacement and force histories with low numerical error for the available dataset. This suggests that the current history contains enough information for the model to learn the dominant response pattern in this single actuator COMSOL case. The early transient figure is especially important because it shows whether the network is following the response after the current trigger instead of simply fitting a static curve.
+
+The model should not yet be interpreted as a complete replacement for the physics based actuator network. The previous network model represents multiple actuators, distributed coupling, and state space dynamics. The current LSTM model represents one actuator only. Therefore, the correct interpretation is:
+\[
+    \text{This LSTM is a single actuator dynamic surrogate model.}
+\]
+It is a first step toward a later data driven or hybrid physics based and data driven model for actuator arrays.
+
+\section{Limitations}
+
+The main limitation is that the model was trained on one input case. An LSTM trained on only one current profile can reproduce that profile, but it cannot be assumed to generalize to arbitrary current inputs. To make the model robust, future data should include different current amplitudes, ramp rates, pulse durations, loads, boundary conditions, and possibly temperature dependent cases.
+
+A second limitation is that the model uses current history only. If actuator behavior depends strongly on temperature, load variation, or boundary conditions, these variables should be included as additional input channels in future models:
+\[
+    X(k) = \left[I(k), T(k), F_w(k), \ldots\right].
+\]
+
+\section{Recommended Next Steps}
+
+The next stage should collect multiple COMSOL or experimental datasets under different input conditions. The LSTM can then be trained using several sequences rather than one sequence. This would allow the model to learn a family of actuator responses. After that, the LSTM can be compared with the mass spring damper state space model and used either as a standalone surrogate model or as a correction term in a hybrid model.
+
+\section{Generated Files}
+
+The script saves the following main outputs:
+
+\begin{itemize}[leftmargin=1.2cm]
+    \item \texttt{ESA\_cleaned\_synchronized\_data.csv}: synchronized current, force, and displacement data.
+    \item \texttt{ESA\_cleaned\_synchronized\_data.mat}: MATLAB version of the cleaned data.
+    \item \texttt{ESA\_single\_actuator\_LSTM\_model.mat}: trained LSTM network, layers, options, normalization parameters, metrics, and data.
+    \item \texttt{ESA\_single\_actuator\_LSTM\_results.csv}: true outputs, predicted outputs, prediction errors, and train or test mask.
+    \item \texttt{ESA\_single\_actuator\_LSTM\_summary.txt}: concise text summary of the LSTM settings and results.
+    \item \texttt{figures/}: all visualization and prediction figures.
+\end{itemize}
+
+\section{Conclusion}
+
+This study establishes a first data driven dynamic model for one electromagnetic soft actuator. The data were cleaned, synchronized, plotted, and used to train a sequence to sequence LSTM model. The model predicts displacement and coil force from current history and achieves low error on the available dataset. The current result is best viewed as a proof of concept for single actuator dynamic modeling. The next step is to expand the dataset and move toward a generalizable model that can support the broader soft actuator array framework.
+
+\end{document}
