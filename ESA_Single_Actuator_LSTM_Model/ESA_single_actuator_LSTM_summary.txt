@@ -1,0 +1,22 @@
+Single Actuator ESA LSTM Model Summary
+=====================================
+
+Model purpose:
+The LSTM learns a dynamic input output model for one actuator.
+Input: current history.
+Outputs: displacement and coil force.
+
+Training settings:
+Training ratio: 0.75
+Hidden units: 64
+Max epochs: 600
+
+Performance metrics:
+Displacement RMSE train: 0.037016451 mm
+Displacement RMSE test : 0.0050344453 mm
+Force RMSE train       : 0.00074366835 N
+Force RMSE test        : 8.6553911e-05 N
+Displacement MAE train : 0.027804958 mm
+Displacement MAE test  : 0.0043012719 mm
+Force MAE train        : 0.00051390438 N
+Force MAE test         : 7.4466778e-05 N
