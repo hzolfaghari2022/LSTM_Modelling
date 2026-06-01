@@ -1,0 +1,19 @@
+Single Actuator ESA LSTM Model Summary
+=====================================
+
+Input: current history
+Outputs: displacement and coil force
+Training ratio: 0.70
+Hidden units: 64
+Max epochs: 600
+
+rmse_disp_train: 0.15258396
+rmse_disp_test: 0.036094272
+rmse_force_train: 0.0032041461
+rmse_force_test: 0.00090954094
+mae_disp_train: 0.099961838
+mae_disp_test: 0.032026728
+mae_force_train: 0.0022484969
+mae_force_test: 0.0008489189
+r2_disp_test: -3.6696608
+r2_force_test: -6.7603532
