@@ -12,11 +12,11 @@ Hidden units: 64
 Max epochs: 600
 
 Performance metrics:
-Displacement RMSE train: 0.063631997 mm
-Displacement RMSE test : 0.023464277 mm
-Force RMSE train       : 0.0010581786 N
-Force RMSE test        : 0.00042394429 N
-Displacement MAE train : 0.049879558 mm
-Displacement MAE test  : 0.022143684 mm
-Force MAE train        : 0.00079790107 N
-Force MAE test         : 0.00038987517 N
+Displacement RMSE train: 0.037016451 mm
+Displacement RMSE test : 0.0050344453 mm
+Force RMSE train       : 0.00074366835 N
+Force RMSE test        : 8.6553911e-05 N
+Displacement MAE train : 0.027804958 mm
+Displacement MAE test  : 0.0043012719 mm
+Force MAE train        : 0.00051390438 N
+Force MAE test         : 7.4466778e-05 N
