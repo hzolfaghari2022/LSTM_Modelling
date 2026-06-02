@@ -1,0 +1,22 @@
+Enhanced Single Actuator LSTM Architecture Summary
+===============================================
+
+Conceptual layer structure:
+1. Sequence input layer with 1 feature: current
+2. LSTM recurrent layer 1 with 64 hidden units
+3. LSTM recurrent layer 2 with 64 hidden units
+4. Fully connected hidden layer with 32 units
+5. ReLU activation layer
+6. Fully connected output layer with 2 outputs
+
+Why two LSTM layers are used:
+- The first recurrent layer learns short term temporal behavior and local memory effects.
+- The second recurrent layer refines higher level nonlinear dynamic patterns.
+- A single LSTM layer may be too limited when the actuator response contains delays, transient memory, and noisy behavior.
+- More than two recurrent layers would likely be unnecessary for this small dataset and could increase overfitting risk.
+
+Sequence length: 25
+Training ratio: 0.7
+Validation ratio: 0.15
+Smoothing used: True
+Smoothing window: 5
