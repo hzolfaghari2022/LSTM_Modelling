@@ -4,7 +4,7 @@
 %   Step 2: Plot each signal one by one with physically meaningful axes.
 %   Step 3: Build a first LSTM based dynamic model for a SINGLE actuator.
 %   Step 4: Predict displacement and coil force from current history.
-%   Step 5: Save figures, cleaned data, trained model, and prediction results.
+%   Step 5: Save all report-ready figures, cleaned data, trained model, and prediction results.
 %   Step 6: Optionally push the current project outputs to the correct GitHub repo.
 %
 % Important:
@@ -43,7 +43,7 @@ end
 
 % LSTM settings
 trainLSTM = true;
-trainRatio = 0.75;              % First 75 percent of the time history is used for training.
+trainRatio = 0.7;              % First 75 percent of the time history is used for training.
 numHiddenUnits = 64;
 maxEpochs = 600;
 initialLearnRate = 1e-3;
@@ -211,6 +211,33 @@ ylabel('Coil force (N)');
 title('Force Versus Displacement');
 localSavePng(gcf, fullfile(figFolder, 'Fig10_Force_Displacement.png'));
 
+
+%% ============================================================
+% Additional report-ready data summary figure
+% =============================================================
+% This figure is created specifically for the Overleaf reports. It summarizes
+% the main measured/simulated signals in one compact panel.
+figure('Color','w', 'Position', [100 100 1000 750]);
+subplot(3,1,1);
+plot(t, currentOnGrid, 'LineWidth', 1.8);
+grid on; box on;
+ylabel('Current (A)');
+title('Report Summary of Single Actuator Dataset');
+
+subplot(3,1,2);
+plot(t, coilForce, 'LineWidth', 1.8); hold on;
+plot(t, weightLoad, '--', 'LineWidth', 1.4);
+grid on; box on;
+ylabel('Force (N)');
+legend('Coil force', 'Weight/load', 'Location', 'best');
+
+subplot(3,1,3);
+plot(t, dispOnGrid, 'LineWidth', 1.8);
+grid on; box on;
+xlabel('Time (s)');
+ylabel('Displacement (mm)');
+localSavePng(gcf, fullfile(figFolder, 'Fig15_Report_Data_Summary.png'));
+
 %% ============================================================
 % Save cleaned data
 % =============================================================
@@ -287,6 +314,48 @@ if trainLSTM
 
     XFull = normalizeSeq(Xraw, muX, sigX);
 
+    %% Figure 16: Train/test split and normalized sequences for report
+    figure('Color','w', 'Position', [100 100 1000 750]);
+    subplot(3,1,1);
+    plot(t, XFull(1,:), 'LineWidth', 1.5); hold on;
+    xline(t(nTrain), 'k:', 'Train/Test split', 'LineWidth', 1.2);
+    grid on; box on;
+    ylabel('Normalized current');
+    title('Normalized LSTM Input and Outputs');
+
+    YFullNorm = normalizeSeq(Yraw, muY, sigY);
+    subplot(3,1,2);
+    plot(t, YFullNorm(1,:), 'LineWidth', 1.5); hold on;
+    xline(t(nTrain), 'k:', 'Train/Test split', 'LineWidth', 1.2);
+    grid on; box on;
+    ylabel('Normalized displacement');
+
+    subplot(3,1,3);
+    plot(t, YFullNorm(2,:), 'LineWidth', 1.5); hold on;
+    xline(t(nTrain), 'k:', 'Train/Test split', 'LineWidth', 1.2);
+    grid on; box on;
+    xlabel('Time (s)');
+    ylabel('Normalized force');
+    localSavePng(gcf, fullfile(figFolder, 'Fig16_LSTM_Normalized_Sequences.png'));
+
+    %% Figure 17: LSTM modeling workflow for report
+    figure('Color','w', 'Position', [100 100 1000 350]);
+    axis off;
+    text(0.08, 0.55, {'Input sequence', 'Current history', 'I(1), I(2), ..., I(k)'}, ...
+        'HorizontalAlignment', 'center', 'FontSize', 13, 'FontWeight', 'bold', ...
+        'BackgroundColor', [0.95 0.95 0.95], 'EdgeColor', 'k', 'Margin', 12);
+    text(0.50, 0.55, {'LSTM dynamic memory', 'Learns time-dependent', 'actuator behavior'}, ...
+        'HorizontalAlignment', 'center', 'FontSize', 13, 'FontWeight', 'bold', ...
+        'BackgroundColor', [0.95 0.95 0.95], 'EdgeColor', 'k', 'Margin', 12);
+    text(0.88, 0.55, {'Output sequence', 'Displacement z(k)', 'Coil force F(k)'}, ...
+        'HorizontalAlignment', 'center', 'FontSize', 13, 'FontWeight', 'bold', ...
+        'BackgroundColor', [0.95 0.95 0.95], 'EdgeColor', 'k', 'Margin', 12);
+    annotation('arrow', [0.22 0.39], [0.55 0.55], 'LineWidth', 1.8);
+    annotation('arrow', [0.62 0.77], [0.55 0.55], 'LineWidth', 1.8);
+    text(0.50, 0.18, sprintf('Architecture: sequence input layer + LSTM (%d hidden units) + fully connected layers + regression output', numHiddenUnits), ...
+        'HorizontalAlignment', 'center', 'FontSize', 12);
+    localSavePng(gcf, fullfile(figFolder, 'Fig17_LSTM_Model_Workflow.png'));
+
     layers = [
         sequenceInputLayer(1, 'Name', 'current_input')
         lstmLayer(numHiddenUnits, 'OutputMode', 'sequence', 'Name', 'lstm_dynamic_memory')
@@ -307,7 +376,7 @@ if trainLSTM
         'Plots', 'training-progress');
 
     % Train the LSTM. Cell arrays are used because the data are time sequences.
-    netLSTM = trainNetwork({XTrain}, {YTrain}, layers, options);
+    [netLSTM, trainInfo] = trainNetwork({XTrain}, {YTrain}, layers, options);
 
     % Predict the entire time history.
     YPredFullNormCell = predict(netLSTM, {XFull}, 'MiniBatchSize', 1);
@@ -350,6 +419,48 @@ if trainLSTM
     fprintf('Displacement RMSE test : %.6g mm\n', lstmMetrics.RMSE_Displacement_Test_mm);
     fprintf('Coil force RMSE train  : %.6g N\n', lstmMetrics.RMSE_Force_Train_N);
     fprintf('Coil force RMSE test   : %.6g N\n', lstmMetrics.RMSE_Force_Test_N);
+
+    %% Save and plot LSTM training history for report
+    trainingHistory = trainingInfoToTable(trainInfo);
+    writetable(trainingHistory, 'ESA_single_actuator_LSTM_training_history.csv');
+
+    %% Figure 20: LSTM training RMSE history
+    figure('Color','w'); hold on;
+    if ismember('TrainingRMSE', trainingHistory.Properties.VariableNames)
+        validTrain = isfinite(trainingHistory.TrainingRMSE);
+        plot(trainingHistory.Iteration(validTrain), trainingHistory.TrainingRMSE(validTrain), 'LineWidth', 1.8);
+    end
+    if ismember('ValidationRMSE', trainingHistory.Properties.VariableNames)
+        validVal = isfinite(trainingHistory.ValidationRMSE);
+        plot(trainingHistory.Iteration(validVal), trainingHistory.ValidationRMSE(validVal), '--', 'LineWidth', 1.8);
+    end
+    grid on; box on;
+    xlabel('Iteration');
+    ylabel('RMSE');
+    title('LSTM Training and Validation RMSE History');
+    legend('Training RMSE', 'Validation RMSE', 'Location', 'best');
+    localSavePng(gcf, fullfile(figFolder, 'Fig20_LSTM_Training_RMSE_History.png'));
+
+    %% Figure 21: LSTM training loss history
+    figure('Color','w'); hold on;
+    if ismember('TrainingLoss', trainingHistory.Properties.VariableNames)
+        validTrain = isfinite(trainingHistory.TrainingLoss);
+        plot(trainingHistory.Iteration(validTrain), trainingHistory.TrainingLoss(validTrain), 'LineWidth', 1.8);
+    end
+    if ismember('ValidationLoss', trainingHistory.Properties.VariableNames)
+        validVal = isfinite(trainingHistory.ValidationLoss);
+        plot(trainingHistory.Iteration(validVal), trainingHistory.ValidationLoss(validVal), '--', 'LineWidth', 1.8);
+    end
+    grid on; box on;
+    xlabel('Iteration');
+    ylabel('Loss');
+    title('LSTM Training and Validation Loss History');
+    legend('Training loss', 'Validation loss', 'Location', 'best');
+    localSavePng(gcf, fullfile(figFolder, 'Fig21_LSTM_Training_Loss_History.png'));
+
+    %% Save LaTeX table of LSTM performance metrics for Overleaf
+    writeLSTMMetricsTable('ESA_single_actuator_LSTM_metrics_table.tex', lstmMetrics);
+    fprintf('LSTM training history and Overleaf metrics table saved successfully.\n');
 
     %% Figure 11: LSTM displacement prediction
     figure('Color','w');
@@ -413,6 +524,50 @@ if trainLSTM
     legend('COMSOL displacement', 'LSTM displacement', 'Current input', 'Location', 'best');
     localSavePng(gcf, fullfile(figFolder, 'Fig14_LSTM_TriggerZoom.png'));
 
+    %% Figure 18: Error metrics for report
+    figure('Color','w', 'Position', [100 100 1000 420]);
+    subplot(1,2,1);
+    bar([lstmMetrics.RMSE_Displacement_Train_mm, lstmMetrics.RMSE_Displacement_Test_mm; ...
+         lstmMetrics.MAE_Displacement_Train_mm,  lstmMetrics.MAE_Displacement_Test_mm]);
+    grid on; box on;
+    set(gca, 'XTickLabel', {'RMSE', 'MAE'});
+    ylabel('Displacement error (mm)');
+    title('Displacement Prediction Metrics');
+    legend('Train', 'Test', 'Location', 'best');
+
+    subplot(1,2,2);
+    bar([lstmMetrics.RMSE_Force_Train_N, lstmMetrics.RMSE_Force_Test_N; ...
+         lstmMetrics.MAE_Force_Train_N,  lstmMetrics.MAE_Force_Test_N]);
+    grid on; box on;
+    set(gca, 'XTickLabel', {'RMSE', 'MAE'});
+    ylabel('Force error (N)');
+    title('Force Prediction Metrics');
+    legend('Train', 'Test', 'Location', 'best');
+    localSavePng(gcf, fullfile(figFolder, 'Fig18_LSTM_Error_Metrics.png'));
+
+    %% Figure 19: Parity plots for report
+    figure('Color','w', 'Position', [100 100 1000 420]);
+    subplot(1,2,1);
+    plot(trueDisplacement_mm, predDisplacement_mm, '.', 'MarkerSize', 10); hold on;
+    minD = min([trueDisplacement_mm; predDisplacement_mm]);
+    maxD = max([trueDisplacement_mm; predDisplacement_mm]);
+    plot([minD maxD], [minD maxD], 'k--', 'LineWidth', 1.4);
+    grid on; box on; axis equal;
+    xlabel('COMSOL displacement (mm)');
+    ylabel('LSTM displacement (mm)');
+    title('Displacement Parity Plot');
+
+    subplot(1,2,2);
+    plot(trueCoilForce_N, predCoilForce_N, '.', 'MarkerSize', 10); hold on;
+    minF = min([trueCoilForce_N; predCoilForce_N]);
+    maxF = max([trueCoilForce_N; predCoilForce_N]);
+    plot([minF maxF], [minF maxF], 'k--', 'LineWidth', 1.4);
+    grid on; box on; axis equal;
+    xlabel('COMSOL coil force (N)');
+    ylabel('LSTM coil force (N)');
+    title('Coil Force Parity Plot');
+    localSavePng(gcf, fullfile(figFolder, 'Fig19_LSTM_Parity_Plots.png'));
+
     %% Save LSTM results
     lstmResults = table(t, currentOnGrid, ...
         trueDisplacement_mm, predDisplacement_mm, displacementError_mm, ...
@@ -434,7 +589,7 @@ if trainLSTM
     normalization.outputNames = {'Displacement_mm', 'CoilForce_N'};
 
     save('ESA_single_actuator_LSTM_model.mat', ...
-        'netLSTM', 'layers', 'options', 'normalization', ...
+        'netLSTM', 'layers', 'options', 'trainInfo', 'trainingHistory', 'normalization', ...
         'lstmMetrics', 'lstmResults', 'cleanedData');
 
     writeLSTMSummary('ESA_single_actuator_LSTM_summary.txt', lstmMetrics, trainRatio, numHiddenUnits, maxEpochs);
@@ -445,6 +600,13 @@ if trainLSTM
 else
     fprintf('\nLSTM training is disabled. Set trainLSTM = true to train the model.\n');
 end
+
+
+%% ============================================================
+% Save report figure inventory for Overleaf
+% =============================================================
+writeFigureInventory(figFolder, 'ESA_LSTM_Report_Figure_List.txt', 'ESA_LSTM_Report_Figure_Includes.tex');
+fprintf('Report figure inventory saved in the figures folder.\n');
 
 %% ============================================================
 % GitHub Push Block for LSTM_Modelling Repository
@@ -687,29 +849,60 @@ function X = denormalizeSeq(Xn, mu, sig)
 end
 
 function localSavePng(figHandle, fileName)
+    % Robust Overleaf-compatible figure saving.
+    % For each requested PNG, this function also saves a PDF and a MATLAB FIG
+    % file with the same base name. The PNG is used directly in Overleaf, the
+    % PDF is useful for vector-style report export, and the FIG file allows
+    % later editing in MATLAB.
+    [folderPath, baseName, ~] = fileparts(fileName);
+    if ~exist(folderPath, 'dir')
+        mkdir(folderPath);
+    end
+
+    pngName = fullfile(folderPath, [baseName, '.png']);
+    pdfName = fullfile(folderPath, [baseName, '.pdf']);
+    figName = fullfile(folderPath, [baseName, '.fig']);
+
     try
         set(figHandle, 'Color', 'w');
         set(findall(figHandle, '-property', 'FontName'), 'FontName', 'Times New Roman');
         set(findall(figHandle, '-property', 'FontSize'), 'FontSize', 12);
         drawnow;
-        exportgraphics(figHandle, fileName, 'Resolution', 300);
+
+        exportgraphics(figHandle, pngName, 'Resolution', 300);
     catch
         try
-            print(figHandle, fileName, '-dpng', '-r300');
+            print(figHandle, pngName, '-dpng', '-r300');
         catch
             fr = getframe(figHandle);
             [img, ~] = frame2im(fr);
-            imwrite(img, fileName, 'png');
+            imwrite(img, pngName, 'png');
         end
     end
 
     try
-        imfinfo(fileName);
+        exportgraphics(figHandle, pdfName, 'ContentType', 'vector');
     catch
-        warning('The saved PNG was not readable. Rewriting using imwrite: %s', fileName);
+        try
+            print(figHandle, pdfName, '-dpdf', '-bestfit');
+        catch
+            warning('Could not save PDF version of figure: %s', pdfName);
+        end
+    end
+
+    try
+        savefig(figHandle, figName);
+    catch
+        warning('Could not save MATLAB FIG version of figure: %s', figName);
+    end
+
+    try
+        imfinfo(pngName);
+    catch
+        warning('The saved PNG was not readable. Rewriting using imwrite: %s', pngName);
         fr = getframe(figHandle);
         [img, ~] = frame2im(fr);
-        imwrite(img, fileName, 'png');
+        imwrite(img, pngName, 'png');
     end
 end
 
@@ -777,6 +970,129 @@ function appendGitIgnore(gitignoreFile, linesToAdd)
     fclose(fid);
 end
 
+
+
+function trainingHistory = trainingInfoToTable(trainInfo)
+    % Convert MATLAB trainNetwork info output to a clean table for reports.
+    preferredFields = {'Iteration', 'Epoch', 'TrainingLoss', 'TrainingRMSE', ...
+        'ValidationLoss', 'ValidationRMSE', 'BaseLearnRate'};
+
+    availableFields = fieldnames(trainInfo);
+    usableFields = {};
+    maxLen = 0;
+
+    for k = 1:numel(preferredFields)
+        name = preferredFields{k};
+        if ismember(name, availableFields)
+            value = trainInfo.(name);
+            if isnumeric(value) || islogical(value)
+                value = value(:);
+                if numel(value) > 1
+                    usableFields{end+1} = name; %#ok<AGROW>
+                    maxLen = max(maxLen, numel(value));
+                end
+            end
+        end
+    end
+
+    if maxLen == 0
+        trainingHistory = table((1:0)', 'VariableNames', {'Iteration'});
+        return;
+    end
+
+    if ismember('Iteration', usableFields)
+        iteration = trainInfo.Iteration(:);
+        if numel(iteration) ~= maxLen
+            iteration = (1:maxLen)';
+        end
+    else
+        iteration = (1:maxLen)';
+    end
+
+    trainingHistory = table(iteration, 'VariableNames', {'Iteration'});
+
+    for k = 1:numel(usableFields)
+        name = usableFields{k};
+        if strcmp(name, 'Iteration')
+            continue;
+        end
+        value = trainInfo.(name);
+        value = value(:);
+        if numel(value) < maxLen
+            value(end+1:maxLen, 1) = NaN; %#ok<AGROW>
+        elseif numel(value) > maxLen
+            value = value(1:maxLen);
+        end
+        trainingHistory.(name) = value;
+    end
+end
+
+function writeLSTMMetricsTable(fileName, metrics)
+    fid = fopen(fileName, 'w');
+    if fid < 0
+        warning('Could not write LSTM metrics LaTeX table.');
+        return;
+    end
+
+    fprintf(fid, '\\begin{table}[H]\n');
+    fprintf(fid, '\\centering\n');
+    fprintf(fid, '\\caption{Prediction performance of the single actuator LSTM model.}\n');
+    fprintf(fid, '\\label{tab:lstm_prediction_metrics}\n');
+    fprintf(fid, '\\begin{tabular}{l c}\n');
+    fprintf(fid, '\\hline\n');
+    fprintf(fid, 'Metric & Value \\\\ \n');
+    fprintf(fid, '\\hline\n');
+    fprintf(fid, 'Displacement RMSE, training & %.6g mm \\\\ \n', metrics.RMSE_Displacement_Train_mm);
+    fprintf(fid, 'Displacement RMSE, testing & %.6g mm \\\\ \n', metrics.RMSE_Displacement_Test_mm);
+    fprintf(fid, 'Coil force RMSE, training & %.6g N \\\\ \n', metrics.RMSE_Force_Train_N);
+    fprintf(fid, 'Coil force RMSE, testing & %.6g N \\\\ \n', metrics.RMSE_Force_Test_N);
+    fprintf(fid, 'Displacement MAE, training & %.6g mm \\\\ \n', metrics.MAE_Displacement_Train_mm);
+    fprintf(fid, 'Displacement MAE, testing & %.6g mm \\\\ \n', metrics.MAE_Displacement_Test_mm);
+    fprintf(fid, 'Coil force MAE, training & %.6g N \\\\ \n', metrics.MAE_Force_Train_N);
+    fprintf(fid, 'Coil force MAE, testing & %.6g N \\\\ \n', metrics.MAE_Force_Test_N);
+    fprintf(fid, '\\hline\n');
+    fprintf(fid, '\\end{tabular}\n');
+    fprintf(fid, '\\end{table}\n');
+
+    fclose(fid);
+end
+
+function writeFigureInventory(figFolder, listFileName, texFileName)
+    % Create a text list and a LaTeX include file for all PNG figures.
+    pngFiles = dir(fullfile(figFolder, 'Fig*.png'));
+    [~, order] = sort({pngFiles.name});
+    pngFiles = pngFiles(order);
+
+    listPath = fullfile(figFolder, listFileName);
+    texPath = fullfile(figFolder, texFileName);
+
+    fid = fopen(listPath, 'w');
+    if fid >= 0
+        fprintf(fid, 'Report-ready figures saved for Overleaf\n');
+        fprintf(fid, '=======================================\n\n');
+        for k = 1:numel(pngFiles)
+            fprintf(fid, '%02d. %s\n', k, pngFiles(k).name);
+        end
+        fclose(fid);
+    end
+
+    fid = fopen(texPath, 'w');
+    if fid >= 0
+        fprintf(fid, '%% Auto-generated LaTeX figure include file.\n');
+        fprintf(fid, '%% Copy selected blocks into your Overleaf report.\n\n');
+        for k = 1:numel(pngFiles)
+            [~, baseName, ~] = fileparts(pngFiles(k).name);
+            captionText = strrep(baseName, '_', ' ');
+            fprintf(fid, '\\begin{figure}[H]\n');
+            fprintf(fid, '    \\centering\n');
+            fprintf(fid, '    \\includegraphics[width=0.92\\textwidth]{figures/%s}\n', pngFiles(k).name);
+            fprintf(fid, '    \\caption{%s.}\n', captionText);
+            fprintf(fid, '    \\label{fig:%s}\n', lower(baseName));
+            fprintf(fid, '\\end{figure}\n\n');
+        end
+        fclose(fid);
+    end
+end
 
 function safeReturnAndDisconnect(originalFolder, repoFolder)
     try
