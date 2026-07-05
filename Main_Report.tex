@@ -55,9 +55,9 @@
 \maketitle
 
 \begin{abstract}
-This report presents a high-level LSTM-based dynamic system identification procedure for estimating actuator displacement and Lorentz force from two chirp-excitation experiments. The objective is to learn a discrete-time, data-driven model that captures the nonlinear temporal relationship between coil current and the actuator responses. The approach is guided by Wang's LSTM-based dynamic system identification framework, especially the use of discrete-time input-output history and series-parallel identification, and by Ogunmolu et al.'s use of deep dynamic neural networks for sequential system-identification data with regression-based loss and separated evaluation data.
+This report presents an LSTM-based dynamic system identification procedure for estimating actuator displacement and Lorentz force from two chirp-excitation experiments. The objective is to learn a discrete-time, data-driven model that captures the nonlinear temporal relationship between coil current and the actuator responses. The approach is guided by Wang's LSTM-based dynamic system identification framework, especially the use of discrete-time input-output history and series-parallel identification, and by Ogunmolu et al.'s use of deep dynamic neural networks for sequential system-identification data with regression-based loss and separated evaluation data.
 
-The implemented model uses a series-parallel LSTM structure. At each prediction step, a recent history of coil current, displacement, and Lorentz force is used to estimate the next displacement and force. Because only two chirp experiments are available, both records are divided into train, validation, and test blocks rather than using one full chirp only for training and the other only for testing. The architecture uses two LSTM layers with 64 hidden units, a 120-sample history window, a nonlinear prediction head, weighted multi-output mean-squared-error loss, and regularization tools such as dropout, weight decay, learning-rate scheduling, gradient clipping, and early stopping. These numerical settings are not copied directly from the papers; they are engineering hyperparameter choices selected for this specific two-chirp actuator dataset.
+The implemented model uses a series-parallel LSTM structure. At each prediction step, a recent history of coil current, displacement, and Lorentz force is used to estimate the next displacement and force. Because only two chirp experiments are available, both records are divided into train, validation, and test blocks rather than using one full chirp only for training and the other only for testing. The architecture uses two LSTM layers with 64 hidden units, a 120-sample history window, a nonlinear prediction head, weighted multi-output mean-squared-error loss, and regularization tools such as dropout, weight decay, learning-rate scheduling, gradient clipping, and early stopping. The numerical settings are treated as implementation hyperparameters selected for this specific two-chirp actuator dataset.
 \end{abstract}
 
 \section{Purpose and Main Idea}
@@ -72,7 +72,7 @@ Therefore, the model is not fitting isolated data points; it is learning how rec
 \end{summarybox}
 
 \section{Connection to the Reference Papers}
-The report uses selected ideas from the two reference papers. It does not reproduce every method in those papers; instead, it translates the relevant theory into the actuator-identification simulation.
+The methodology is based on selected ideas from the two reference papers. The objective is not to reproduce every method in those studies, but to apply the relevant system-identification concepts to the actuator dataset.
 
 \subsection{Connection to Wang's LSTM Dynamic Identification Paper}
 Wang presents nonlinear dynamic systems in discrete-time form and discusses LSTM-based system identification using input-output history. The most relevant idea for this simulation is the series-parallel identification structure, where measured output history is used together with input history during training \cite{wang2017}.
@@ -90,7 +90,7 @@ The similarity is the use of discrete-time input-output history and measured out
 Ogunmolu et al. train deep dynamic neural networks on sequential input-output data and evaluate whether the trained model generalizes to separated data \cite{ogunmolu2016}. Their work supports the idea that recurrent/deep neural structures can be used for nonlinear system identification when the data are sequential.
 
 \begin{paperbox}{How Ogunmolu et al.'s idea is used here}
-The actuator data are converted into sequential LSTM windows instead of independent static rows. The model is trained by minimizing a regression loss based on prediction error, and performance is evaluated on validation and test windows that are not used for weight updates. This follows the same high-level training and evaluation trend used in deep dynamic system identification.
+The actuator data are converted into sequential LSTM windows instead of independent static rows. The model is trained by minimizing a regression loss based on prediction error, and performance is evaluated on validation and test windows that are not used for weight updates. This follows the same general training and evaluation approach used in deep dynamic system identification.
 \end{paperbox}
 
 \section{Dataset and Data Usage}
@@ -128,14 +128,6 @@ The two chirp records are kept as separate experimental time series during prepr
 
 \textbf{Level 2: LSTM window creation.} After the train/validation/test portions are defined, 120-sample LSTM windows are created inside each portion. Each 120-sample window is used to predict the next sampled displacement and force.
 \end{databox}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\textwidth]{data_usage_workflow_clean.png}
-\caption{Clear data usage workflow. The two chirp experiments are kept as separate time-series records. Each record is divided into 2500-sample time blocks. Each block is split into training, validation, and testing portions. Finally, 120-sample LSTM input windows are created inside each portion to predict the next displacement-force sample.}
-\label{fig:block_split}
-\end{figure}
-
 
 \begin{figure}[H]
 \centering
@@ -355,17 +347,118 @@ Output & 2 variables & Predicts next-step displacement and Lorentz force. \\
 \label{fig:arch_choice_graphic}
 \end{figure}
 
-\begin{archbox}{Why two LSTM layers?}
-Two layers were selected as a balance. One layer may be too limited for nonlinear current-displacement-force dynamics. The first layer extracts temporal features from the measured sequence, and the second layer forms a higher-level dynamic representation. More than two layers would increase the number of trainable parameters and could overfit because only two chirp experiments are available.
-\end{archbox}
+\begin{summarybox}{Model parameters vs. engineering hyperparameters}
 
-\begin{archbox}{Why 64 hidden units?}
-The hidden size is the dimension of the LSTM memory vector. A small hidden size such as 16 or 32 may not have enough capacity for the nonlinear actuator response. A large hidden size such as 128 or 256 would greatly increase the parameter count and overfitting risk. Therefore, 64 hidden units were selected as a moderate-capacity choice.
-\end{archbox}
+The neural network has two types of quantities:
 
-\begin{summarybox}{Meaning of engineering choices}
-An engineering choice means a hyperparameter selected before training for this dataset. The network learns its weights and biases during training, but values such as the number of layers, hidden units, sequence length, learning rate, and dropout are selected by the model designer. The papers justify the modeling direction; the exact numerical settings are chosen for the available actuator data.
+\[
+\underbrace{\theta=\{W,b\}}_{\text{learned during training}}
+\qquad\text{and}\qquad
+\underbrace{\lambda=\{N_L,N_h,L_{\mathrm{seq}},\eta,p_{\mathrm{drop}}\}}_{\text{selected before training}}.
+\]
+
+The network learns the weights and biases $\theta$ by minimizing the prediction loss:
+
+\[
+\theta^{*}
+=
+\arg\min_{\theta}
+\frac{1}{N}
+\sum_{j=1}^{N}
+\left[
+2.0(\hat{x}_j-x_j)^2
++
+1.0(\hat{F}_j-F_j)^2
+\right].
+\]
+
+However, the main model settings $\lambda$ are selected before training:
+
+\[
+N_L=2,\qquad
+N_h=64,\qquad
+L_{\mathrm{seq}}=120,\qquad
+\eta=5\times10^{-4},\qquad
+p_{\mathrm{drop}}=0.10.
+\]
+
+These values were selected as engineering hyperparameters for this dataset. The reference papers motivate the use of LSTM-based dynamic system identification, while the numerical values are chosen based on the size of the available data, the nonlinear actuator behavior, training stability, and overfitting risk.
 \end{summarybox}
+
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    x=1cm,y=1cm,
+    >=Latex,
+    font=\sffamily,
+    leftbox/.style={
+        draw=black!60,
+        fill=gray!4,
+        rounded corners=3pt,
+        line width=0.7pt,
+        minimum width=6.2cm,
+        minimum height=1.55cm,
+        align=center,
+        font=\sffamily\large
+    },
+    rightbox/.style={
+        draw=blue!70!black,
+        fill=blue!4,
+        rounded corners=3pt,
+        line width=0.7pt,
+        text width=6.9cm,
+        minimum height=1.55cm,
+        align=left,
+        inner sep=6pt,
+        font=\sffamily\large
+    },
+    arr/.style={
+        -{Latex[length=3mm,width=2.3mm]},
+        line width=0.9pt,
+        draw=black!75
+    }
+]
+
+% Title
+\node[font=\sffamily\bfseries\fontsize{20}{22}\selectfont] at (6.7,10.7)
+{Engineering hyperparameters and their rationale};
+
+% Left column
+\node[leftbox] (l1) at (3.6,8.8) {$N_L = 2$ LSTM layers};
+\node[leftbox] (l2) at (3.6,6.7) {$N_h = 64$ hidden units};
+\node[leftbox] (l3) at (3.6,4.6) {$L_{\mathrm{seq}} = 120$ samples};
+\node[leftbox] (l4) at (3.6,2.5) {$\eta = 5 \times 10^{-4}$ learning rate};
+\node[leftbox] (l5) at (3.6,0.4) {$p_{\mathrm{drop}} = 0.10$ dropout};
+
+% Right column
+\node[rightbox] (r1) at (12.6,8.8)
+{\textbf{Moderate depth:} enough temporal modeling capacity without making the network too deep for only two chirp experiments.};
+
+\node[rightbox] (r2) at (12.6,6.7)
+{\textbf{Moderate memory size:} enough capacity for nonlinear actuator dynamics while limiting overfitting risk.};
+
+\node[rightbox] (r3) at (12.6,4.6)
+{\textbf{History length:} gives $120 \times 0.002 = 0.24$ s of recent actuator information for each prediction.};
+
+\node[rightbox] (r4) at (12.6,2.5)
+{\textbf{Training stability:} small enough to avoid unstable LSTM updates, but large enough to allow convergence.};
+
+\node[rightbox] (r5) at (12.6,0.4)
+{\textbf{Regularization:} mild dropout reduces memorization of the limited two-chirp dataset.};
+
+% Arrows
+\draw[arr] (l1.east) -- (r1.west);
+\draw[arr] (l2.east) -- (r2.west);
+\draw[arr] (l3.east) -- (r3.west);
+\draw[arr] (l4.east) -- (r4.west);
+\draw[arr] (l5.east) -- (r5.west);
+
+\end{tikzpicture}%
+}
+\caption{Selected engineering hyperparameters and the high-level reason for each choice. These values were chosen before training based on the available actuator dataset and training behavior.}
+\label{fig:engineering_choices_clean}
+\end{figure}
 
 \section{Training Method}
 The model is trained as a supervised regression problem. Each input window is passed through the LSTM, the prediction head estimates the next displacement and force, and the prediction is compared with the measured target.
@@ -471,7 +564,7 @@ Separated evaluation \cite{ogunmolu2016} & Train/validation/test blocks & Evalua
 \end{table}
 
 \section{Conclusion}
-An LSTM-based series-parallel dynamic identifier was implemented for actuator displacement and Lorentz-force prediction using two chirp experiments. The model uses recent histories of coil current, displacement, and force to predict the next actuator response. The main theoretical direction comes from LSTM-based dynamic system identification and sequential neural-network system identification. The exact hyperparameters, including two LSTM layers, 64 hidden units, 120-sample sequences, learning rate, and dropout, were selected as dataset-specific engineering choices to balance learning capacity, training stability, and overfitting risk. The results show how the trained model follows the measured actuator response on unseen test windows, while the error plots identify the remaining mismatch.
+An LSTM-based series-parallel dynamic identifier was implemented for actuator displacement and Lorentz-force prediction using two chirp experiments. The model uses recent histories of coil current, displacement, and force to predict the next actuator response. The main theoretical direction comes from LSTM-based dynamic system identification and sequential neural-network system identification. The main hyperparameters were selected to balance learning capacity, training stability, and overfitting risk for the available data. The results show how the trained model follows the measured actuator response on unseen test windows, while the error plots identify the remaining mismatch.
 
 \begin{cautionbox}{Important limitation}
 This work uses only two chirp experiments. Therefore, the model should be viewed as an initial data-driven identifier rather than a fully validated actuator model. A stronger future study should include more experiments with different amplitudes, frequencies, operating conditions, and possibly PRBS or step inputs for better generalization testing.
