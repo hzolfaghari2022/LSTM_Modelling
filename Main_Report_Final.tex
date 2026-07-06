@@ -1,0 +1,585 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta, calc}
+
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+\graphicspath{{./}{figures/}}
+
+\definecolor{paperbg}{RGB}{244,238,255}
+\definecolor{paperframe}{RGB}{103,71,170}
+\definecolor{databg}{RGB}{232,248,239}
+\definecolor{dataframe}{RGB}{31,122,65}
+\definecolor{archbg}{RGB}{231,243,255}
+\definecolor{archframe}{RGB}{23,88,156}
+\definecolor{trainbg}{RGB}{255,248,220}
+\definecolor{trainframe}{RGB}{176,126,0}
+\definecolor{cautionbg}{RGB}{255,239,239}
+\definecolor{cautionframe}{RGB}{170,50,50}
+\definecolor{graybg}{RGB}{247,247,247}
+\definecolor{grayframe}{RGB}{90,90,90}
+
+\newtcolorbox{paperbox}[1]{enhanced, breakable, colback=paperbg, colframe=paperframe, title={#1}, fonttitle=\bfseries, arc=2mm, boxrule=0.9pt, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{databox}[1]{enhanced, breakable, colback=databg, colframe=dataframe, title={#1}, fonttitle=\bfseries, arc=2mm, boxrule=0.9pt, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{archbox}[1]{enhanced, breakable, colback=archbg, colframe=archframe, title={#1}, fonttitle=\bfseries, arc=2mm, boxrule=0.9pt, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{trainbox}[1]{enhanced, breakable, colback=trainbg, colframe=trainframe, title={#1}, fonttitle=\bfseries, arc=2mm, boxrule=0.9pt, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{cautionbox}[1]{enhanced, breakable, colback=cautionbg, colframe=cautionframe, title={#1}, fonttitle=\bfseries, arc=2mm, boxrule=0.9pt, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{summarybox}[1]{enhanced, breakable, colback=graybg, colframe=grayframe, title={#1}, fonttitle=\bfseries, arc=2mm, boxrule=0.9pt, left=2mm, right=2mm, top=1mm, bottom=1mm}
+
+\newcommand{\vect}[1]{\mathbf{#1}}
+\newcommand{\safefig}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{%
+    \IfFileExists{figures/#2}{\includegraphics[#1]{figures/#2}}{%
+      \fbox{\begin{minipage}{0.88\linewidth}\centering Missing figure file: \texttt{#2}\end{minipage}}%
+    }%
+  }%
+}
+
+\title{High-Level Report on LSTM-Based Dynamic System Identification of Actuator Response}
+\author{Hussein Zolfaghari}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report presents an LSTM-based dynamic system identification study for estimating actuator displacement and Lorentz force from two chirp-excitation experiments. The objective is to learn a discrete-time, data-driven model that captures the nonlinear temporal relationship between coil current and the actuator responses. The approach is guided by Wang's LSTM-based dynamic system identification framework, especially the use of discrete-time input-output history and series-parallel identification, and by Ogunmolu et al.'s use of deep dynamic neural networks for sequential system-identification data with regression-based loss and separated evaluation data.
+
+The implemented model follows a series-parallel LSTM structure. At each prediction step, a recent history of coil current, displacement, and Lorentz force is used to estimate the next displacement and force. Because only two chirp experiments are available, both records are divided into train, validation, and test blocks rather than using one full chirp only for training and the other only for testing. The architecture uses two LSTM layers with 64 hidden units, a 120-sample history window, a nonlinear prediction head, weighted multi-output mean-squared-error loss, and regularization tools such as dropout, weight decay, learning-rate scheduling, gradient clipping, and early stopping. The numerical settings are implementation hyperparameters selected for this specific two-chirp actuator dataset.
+\end{abstract}
+
+\section{Purpose and Main Idea}
+The goal of this work is to identify a dynamic model of the actuator directly from measured data. The model receives recent actuator history and predicts the next-step output. The input signal is coil current $I$, and the outputs are displacement $x$ and Lorentz force $F$.
+
+\begin{summarybox}{Main system-identification task}
+The actuator is treated as a nonlinear discrete-time dynamic system. The LSTM learns the mapping
+\begin{equation}
+\{I(k-119:k),x(k-119:k),F(k-119:k)\}\rightarrow [x(k+1),F(k+1)].
+\end{equation}
+Therefore, the model is trained on time histories rather than isolated data points, so the recent actuator history is used to predict the next displacement and force.
+\end{summarybox}
+
+\section{Connection to the Reference Papers}
+The methodology is based on selected ideas from the two reference papers. The objective is to apply the relevant system-identification concepts from those studies to the actuator dataset, rather than reproducing every methodological detail.
+
+\subsection{Connection to Wang's LSTM Dynamic Identification Paper}
+Wang presents nonlinear dynamic systems in discrete-time form and discusses LSTM-based system identification using input-output history. The most relevant idea for this simulation is the series-parallel identification structure, where measured output history is used together with input history during training \cite{wang2017}.
+
+\begin{paperbox}{Use of Wang's input-output identification idea}
+Wang's formulation uses past inputs and past outputs to estimate the dynamic response. In this work, the same input-output-history idea is written using the actuator variables:
+\begin{equation}
+\text{input history: }[I(k),x(k),F(k)], \qquad
+\text{target: }[x(k+1),F(k+1)].
+\end{equation}
+The similarity is the use of discrete-time input-output history and measured output feedback during training. The main difference is that the present implementation predicts two outputs and does not include Wang's convex multi-LSTM cluster.
+\end{paperbox}
+
+\subsection{Connection to Ogunmolu et al.'s Deep Dynamic Neural Network Paper}
+Ogunmolu et al. train deep dynamic neural networks on sequential input-output data and evaluate whether the trained model generalizes to separated data \cite{ogunmolu2016}. Their work supports the idea that recurrent/deep neural structures can be used for nonlinear system identification when the data are sequential.
+
+\begin{paperbox}{Use of Ogunmolu et al.'s sequential-learning idea}
+The actuator data are converted into sequential LSTM windows instead of independent static rows. The model is trained by minimizing a regression loss based on prediction error, and performance is evaluated on validation and test windows that are not used for weight updates. This follows the same general idea of training a dynamic neural model on sequential data and evaluating it on separated data.
+\end{paperbox}
+
+\section{Dataset and Data Usage}
+The dataset contains two experimental records named \texttt{Chirp\_1} and \texttt{Chirp\_2}. Each record is a time-series experiment of the same actuator under chirp current excitation.
+
+\texttt{Chirp\_1} and \texttt{Chirp\_2} are two experimental runs of the same actuator. In each run, a chirp current is applied and the actuator response is recorded over time. They are not two different outputs. Each record contains the input current and the corresponding displacement and Lorentz force response.
+
+\subsection{Sampling and LSTM Window Creation}
+The raw time-series data are resampled to a common time step of
+\begin{equation}
+\Delta t = 0.002~\text{s}.
+\end{equation}
+This gives each discrete step the same physical time scale in both chirp experiments.
+
+\begin{databox}{Sequence length used for one-step prediction}
+The sequence length is 120 samples. Therefore, one LSTM input example contains 120 consecutive sampled time instants, and the target is the next sample:
+\begin{equation}
+[I(1:120),x(1:120),F(1:120)]\rightarrow[x(121),F(121)].
+\end{equation}
+Since $\Delta t=0.002$ s, the input history corresponds to
+\begin{equation}
+120\times0.002 = 0.24~\text{s}.
+\end{equation}
+This 0.24 s history window provides recent actuator memory and phase information while keeping the training cost reasonable for the available two-chirp dataset.
+\end{databox}
+
+
+\subsection{Train, Validation, and Test Strategy}
+The two chirp records are kept as separate experimental time series during preprocessing. The data split is then performed inside each chirp using two levels: a block level to organize the experiment in time and a window level to create LSTM training examples.
+
+\begin{databox}{Two-level data organization}
+\textbf{Level 1: block-based splitting.} Each chirp is divided into contiguous blocks of 2500 samples. Since the resampled time step is $\Delta t=0.002$ s, each block represents 5.0 s of actuator response. Each block is split by time into 70\% training, 15\% validation, and 15\% testing. 
+
+\textbf{Level 2: LSTM window creation.} After the train/validation/test portions are defined, 120-sample LSTM windows are generated inside each portion. Each 120-sample window is used to predict the next sampled displacement and force.
+\end{databox}
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    >=Latex,
+    font=\sffamily,
+    arrow/.style={-Latex, line width=0.8pt, black},
+    box/.style={
+        draw=black,
+        rounded corners=3pt,
+        line width=0.7pt,
+        align=center,
+        font=\sffamily\large,
+        minimum height=1.10cm
+    },
+    inputbox/.style={box, fill=blue!10, minimum width=3.95cm},
+    countbox/.style={box, fill=gray!8, minimum width=5.10cm},
+    completebox/.style={box, fill=gray!8, minimum width=3.95cm},
+    splitbox/.style={
+        draw=black,
+        line width=0.7pt,
+        align=center,
+        font=\sffamily\large,
+        minimum height=1.10cm
+    },
+    trainbox/.style={splitbox, fill=green!18, minimum width=4.15cm},
+    valbox/.style={splitbox, fill=yellow!28, minimum width=3.75cm},
+    testbox/.style={splitbox, fill=red!18, minimum width=3.75cm},
+    histbox/.style={box, fill=violet!18, minimum width=5.15cm},
+    targetbox/.style={box, fill=gray!8, minimum width=3.95cm}
+]
+
+\node[font=\sffamily\bfseries\Huge] at (8.1,8.6) {Data usage summary};
+
+\node[inputbox] (chirp1) at (1.9,6.85)
+{\texttt{Chirp\_1}\\[1.5mm]5659 samples};
+
+\node[inputbox] (chirp2) at (1.9,5.05)
+{\texttt{Chirp\_2}\\[1.5mm]40169 samples};
+
+\node[countbox] (count1) at (6.8,6.85)
+{2 full blocks\\[1.5mm]+ 659 remaining samples};
+
+\node[countbox] (count2) at (6.8,5.05)
+{16 full blocks\\[1.5mm]+ 169 remaining samples};
+
+\node[completebox] (complete) at (12.5,5.95)
+{Each complete block\\[1.5mm]2500 samples};
+
+\node[trainbox, anchor=west] (train) at (7.2,3.25)
+{70\% training\\[1.5mm]1750 samples};
+
+\node[valbox, anchor=west] (val) at (train.east)
+{15\% validation\\[1.5mm]375 samples};
+
+\node[testbox, anchor=west] (test) at (val.east)
+{15\% testing\\[1.5mm]375 samples};
+
+\node[histbox] (hist) at (11.0,1.35)
+{Inside each portion:\\[1.5mm]120-sample history};
+
+\node[targetbox] (target) at (16.7,1.35)
+{Next-sample target\\[1.5mm]$[x(k+1),\,F(k+1)]$};
+
+\node[font=\sffamily\bfseries\Large, anchor=east] at (5.4,-0.35) {Example:};
+
+\node[font=\Large, anchor=west] at (5.55,-0.35)
+{$[I(1\!:\!120),\,x(1\!:\!120),\,F(1\!:\!120)]\;\rightarrow\;[x(121),\,F(121)]$};
+
+\draw[arrow] (chirp1.east) -- (count1.west);
+\draw[arrow] (chirp2.east) -- (count2.west);
+
+\draw[line width=0.8pt] (count1.east) -- ++(0.55,0) |- ($(count1.east)+(0.55,-0.90)$);
+\draw[line width=0.8pt] (count2.east) -- ++(0.55,0) |- ($(count2.east)+(0.55,0.90)$);
+\draw[arrow] ($(count1.east)+(0.55,-0.90)$) -- (complete.west);
+
+\draw[arrow] (complete.south) -- ++(0,-0.95) -- ($(train.north)!0.55!(test.north)$);
+
+\draw[arrow] ($(train.south)!0.50!(test.south)$) -- (hist.north);
+
+\draw[arrow] (hist.east) -- (target.west);
+
+\end{tikzpicture}%
+}
+\caption{Data usage summary for the LSTM identification procedure.}
+\label{fig:data_usage_summary}
+\end{figure}
+
+\begin{databox}{Numerical interpretation of the data split}
+For one 2500-sample block, the split is approximately
+\begin{equation}
+2500 = 1750\; (\text{training}) + 375\; (\text{validation}) + 375\; (\text{testing}).
+\end{equation}
+Inside each of these portions, the LSTM examples are formed using a 120-sample history to predict the next sample:
+\begin{equation}
+1{:}120\rightarrow121,\qquad 2{:}121\rightarrow122,\qquad 3{:}122\rightarrow123,\ldots
+\end{equation}
+This procedure preserves the time-series structure of the experiments because windows are generated within each chirp and within each split portion, rather than across unrelated parts of the dataset.
+\end{databox}
+
+\section{Model Architecture}
+The implemented model is a multi-output LSTM identifier. In the default series-parallel mode, the input dimension is three:
+\begin{equation}
+[I(k),x(k),F(k)],
+\end{equation}
+and the output dimension is two:
+\begin{equation}
+[\hat{x}(k+1),\hat{F}(k+1)].
+\end{equation}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4cm}p{3cm}p{7cm}}
+\toprule
+Item & Value & High-level reason \\
+\midrule
+Input mode & Series-parallel & Uses current plus measured displacement and force history, following Wang's input-output identification idea. \\
+Sequence length & 120 samples & Gives 0.24 s of recent actuator history after resampling. \\
+LSTM depth & 2 layers & Provides moderate temporal modeling capacity without making the model unnecessarily deep for the available two-chirp dataset. \\
+Hidden units & 64 & Provides sufficient memory capacity for nonlinear dynamics while limiting overfitting risk. \\
+Prediction head & Linear--tanh--dropout--linear & Maps the LSTM memory state to the two physical outputs through a compact nonlinear head. \\
+Output & 2 variables & Predicts next-step displacement and Lorentz force. \\
+\bottomrule
+\end{tabular}
+\caption{High-level architecture summary.}
+\label{tab:arch_summary}
+\end{table}
+
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[x=1cm,y=1cm,>=Latex]
+\tikzset{
+  panel/.style={draw=blue!70!black, fill=blue!5, rounded corners=0.18cm, line width=0.5pt},
+  title/.style={font=\sffamily\bfseries\fontsize{13.5}{15}\selectfont, text=blue!70!black, anchor=west},
+  titlefit/.style={font=\sffamily\bfseries\fontsize{12.5}{14}\selectfont, text=blue!70!black, anchor=west},
+  num/.style={circle, fill=blue!80!black, text=white, font=\sffamily\bfseries\fontsize{18}{18}\selectfont, minimum size=0.62cm, inner sep=0pt},
+  dbox/.style={draw=black!70, fill=white, rounded corners=0.12cm, line width=0.45pt, minimum height=0.92cm, align=center, font=\sffamily\fontsize{10}{11}\selectfont},
+  btxt/.style={font=\sffamily\fontsize{10}{12}\selectfont, align=left, text=black!90, anchor=north west},
+  arr/.style={-{Latex[length=2.9mm,width=2.3mm]}, line width=0.75pt, draw=black!90}
+}
+\path[use as bounding box] (0,-12.9) rectangle (16.8,0.2);
+
+% panel rectangles
+\draw[panel] (0.1,-0.1) rectangle (8.2,-3.85);
+\draw[panel] (8.6,-0.1) rectangle (16.7,-3.85);
+\draw[panel] (0.1,-4.15) rectangle (8.2,-7.90);
+\draw[panel] (8.6,-4.15) rectangle (16.7,-7.90);
+\draw[panel] (0.1,-8.20) rectangle (8.2,-11.95);
+\draw[panel] (8.6,-8.20) rectangle (16.7,-11.95);
+
+% 1 Input mode
+\node[num] at (0.65,-0.55) {1};
+\node[title] at (1.2,-0.55) {Input mode: series-parallel};
+\node[dbox, minimum width=2.45cm] (a1) at (1.9,-1.8) {$[I,x,F]$\\history};
+\node[dbox, minimum width=1.75cm] (a2) at (4.35,-1.8) {LSTM};
+\node[dbox, minimum width=2.05cm] (a3) at (6.7,-1.8) {$[\hat{x},\hat{F}]$\\next step};
+\draw[arr] (a1.east) -- (a2.west);
+\draw[arr] (a2.east) -- (a3.west);
+\node[btxt, text width=6.8cm] at (0.85,-2.58) {Measured past displacement and force are\\used together with current history during\\training.};
+
+% 2 Sequence length
+\node[num] at (9.15,-0.55) {2};
+\node[titlefit] at (9.55,-0.55) {Sequence length: 120 samples};
+\draw[arr] (9.35,-1.55) -- (16.15,-1.55);
+\foreach \x in {9.85,12.65,15.15}{\draw[line width=0.55pt] (\x,-1.32) -- (\x,-1.78);} 
+\node[font=\sffamily\fontsize{11}{12}\selectfont, anchor=north] at (9.85,-1.88) {$k-119$};
+\node[font=\sffamily\fontsize{11}{12}\selectfont, anchor=north] at (12.65,-1.88) {$k$};
+\node[font=\sffamily\fontsize{11}{12}\selectfont, anchor=north] at (15.15,-1.88) {$k+1$};
+\node[btxt, text width=6.9cm] at (9.25,-2.58) {The LSTM receives 120 sampled instants,\\equal to $120\times0.002 = 0.24$ s of recent\\history.};
+
+% 3 depth
+\node[num] at (0.65,-4.60) {3};
+\node[title] at (1.2,-4.60) {LSTM depth: 2 layers};
+\node[dbox, minimum width=1.4cm] (c1) at (1.2,-5.7) {Input};
+\node[dbox, minimum width=1.65cm] (c2) at (3.0,-5.7) {LSTM 1};
+\node[dbox, minimum width=1.65cm] (c3) at (5.0,-5.7) {LSTM 2};
+\node[dbox, minimum width=1.45cm] (c4) at (6.95,-5.7) {Head};
+\draw[arr] (c1.east) -- (c2.west);
+\draw[arr] (c2.east) -- (c3.west);
+\draw[arr] (c3.east) -- (c4.west);
+\node[btxt, text width=6.8cm] at (0.8,-6.43) {Two stacked recurrent layers provide moderate\\temporal modeling capacity without making\\the model unnecessarily deep.};
+
+% 4 hidden units
+\node[num] at (9.15,-4.60) {4};
+\node[title] at (9.7,-4.60) {Hidden units: 64};
+\node[dbox, minimum width=5.3cm] at (12.65,-5.65) {$h_t=[h_1,h_2,\ldots,h_{64}]$};
+\node[btxt, text width=6.9cm] at (9.25,-6.43) {Each LSTM layer summarizes the recent\\actuator history using a 64-dimensional\\hidden state.};
+
+% 5 prediction head
+\node[num] at (0.65,-8.65) {5};
+\node[title] at (1.2,-8.65) {Prediction head};
+\node[dbox, minimum width=1.45cm] (e1) at (1.1,-9.75) {Linear};
+\node[dbox, minimum width=1.45cm] (e2) at (3.0,-9.75) {tanh};
+\node[dbox, minimum width=1.65cm] (e3) at (4.95,-9.75) {dropout};
+\node[dbox, minimum width=1.45cm] (e4) at (6.95,-9.75) {Linear};
+\draw[arr] (e1.east) -- (e2.west);
+\draw[arr] (e2.east) -- (e3.west);
+\draw[arr] (e3.east) -- (e4.west);
+\node[btxt, text width=6.8cm] at (0.8,-10.53) {The head maps the learned LSTM memory\\state to the physical outputs using a small\\nonlinear transformation.};
+
+% 6 outputs
+\node[num] at (9.15,-8.65) {6};
+\node[title] at (9.7,-8.65) {Output: 2 variables};
+\node[dbox, minimum width=2.2cm] (f1) at (10.8,-9.72) {Final layer};
+\node[dbox, minimum width=2.35cm] (f2) at (14.15,-9.28) {$\hat{x}(k+1)$};
+\node[dbox, minimum width=2.35cm] (f3) at (14.15,-10.16) {$\hat{F}(k+1)$};
+\draw[arr] (f1.east) -- ++(0.6,0) |- (f2.west);
+\draw[arr] (f1.east) -- ++(0.6,0) |- (f3.west);
+\node[btxt, text width=6.9cm] at (9.25,-10.86) {The network predicts next-step displacement\\and Lorentz force at the same time.};
+\end{tikzpicture}%
+}
+\caption{Graphical interpretation of the architecture choices listed in Table~\ref{tab:arch_summary}.}
+\label{fig:arch_choice_graphic}
+\end{figure}
+
+\begin{summarybox}{Model parameters vs. engineering hyperparameters}
+
+The neural network has two types of quantities:
+
+\[
+\underbrace{\theta=\{W,b\}}_{\text{learned during training}}
+\qquad\text{and}\qquad
+\underbrace{\lambda=\{N_L,N_h,L_{\mathrm{seq}},\eta,p_{\mathrm{drop}}\}}_{\text{selected before training}}.
+\]
+
+The network learns the weights and biases $\theta$ by minimizing the prediction loss:
+
+\[
+\theta^{*}
+=
+\arg\min_{\theta}
+\frac{1}{N}
+\sum_{j=1}^{N}
+\left[
+2.0(\hat{x}_j-x_j)^2
++
+1.0(\hat{F}_j-F_j)^2
+\right].
+\]
+
+The main model settings $\lambda$ are selected before training:
+
+\[
+N_L=2,\qquad
+N_h=64,\qquad
+L_{\mathrm{seq}}=120,\qquad
+\eta=5\times10^{-4},\qquad
+p_{\mathrm{drop}}=0.10.
+\]
+
+These values are engineering hyperparameters for this dataset. The reference papers motivate the use of LSTM-based dynamic system identification, while the numerical values are chosen based on the size of the available data, the nonlinear actuator behavior, training stability, and overfitting risk.
+\end{summarybox}
+
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    x=1cm,y=1cm,
+    >=Latex,
+    font=\sffamily,
+    leftbox/.style={
+        draw=black!60,
+        fill=gray!4,
+        rounded corners=3pt,
+        line width=0.7pt,
+        minimum width=6.2cm,
+        minimum height=1.55cm,
+        align=center,
+        font=\sffamily\large
+    },
+    rightbox/.style={
+        draw=blue!70!black,
+        fill=blue!4,
+        rounded corners=3pt,
+        line width=0.7pt,
+        text width=6.9cm,
+        minimum height=1.55cm,
+        align=left,
+        inner sep=6pt,
+        font=\sffamily\large
+    },
+    arr/.style={
+        -{Latex[length=3mm,width=2.3mm]},
+        line width=0.9pt,
+        draw=black!75
+    }
+]
+
+% Left column
+\node[leftbox] (l1) at (3.6,8.8) {$N_L = 2$ LSTM layers};
+\node[leftbox] (l2) at (3.6,6.7) {$N_h = 64$ hidden units};
+\node[leftbox] (l3) at (3.6,4.6) {$L_{\mathrm{seq}} = 120$ samples};
+\node[leftbox] (l4) at (3.6,2.5) {$\eta = 5 \times 10^{-4}$ learning rate};
+\node[leftbox] (l5) at (3.6,0.4) {$p_{\mathrm{drop}} = 0.10$ dropout};
+
+% Right column
+\node[rightbox] (r1) at (12.6,8.8)
+{\textbf{Moderate depth:} enough temporal modeling capacity without making the network too deep for only two chirp experiments.};
+
+\node[rightbox] (r2) at (12.6,6.7)
+{\textbf{Moderate memory size:} enough capacity for nonlinear actuator dynamics while limiting overfitting risk.};
+
+\node[rightbox] (r3) at (12.6,4.6)
+{\textbf{History length:} gives $120 \times 0.002 = 0.24$ s of recent actuator information for each prediction.};
+
+\node[rightbox] (r4) at (12.6,2.5)
+{\textbf{Training stability:} small enough to avoid unstable LSTM updates, but large enough to allow convergence.};
+
+\node[rightbox] (r5) at (12.6,0.4)
+{\textbf{Regularization:} mild dropout reduces memorization of the limited two-chirp dataset.};
+
+% Arrows
+\draw[arr] (l1.east) -- (r1.west);
+\draw[arr] (l2.east) -- (r2.west);
+\draw[arr] (l3.east) -- (r3.west);
+\draw[arr] (l4.east) -- (r4.west);
+\draw[arr] (l5.east) -- (r5.west);
+
+\end{tikzpicture}%
+}
+\caption{Selected engineering hyperparameters and the high-level reason for each choice. These values were selected before training based on the available actuator dataset and training behavior.}
+\label{fig:engineering_choices_clean}
+\end{figure}
+
+\section{Training Method}
+The model is trained as a supervised regression model. Each input window is passed through the LSTM, the prediction head estimates the next displacement and force, and the prediction is compared with the measured target.
+
+\subsection{Loss Function}
+A weighted multi-output MSE loss is used:
+\begin{equation}
+\mathcal{L}=\frac{1}{N}\sum_{j=1}^{N}\left[2.0(\hat{x}_j-x_j)^2+1.0(\hat{F}_j-F_j)^2\right].
+\end{equation}
+
+The model predicts two quantities with different physical meanings. Weighted MSE keeps both outputs in the training objective but gives extra attention to displacement, which showed larger mismatch in the preliminary runs. This is a practical extension of MSE-based regression to a two-output actuator model.
+
+\subsection{Training Settings}
+The main training settings are summarized in Table~\ref{tab:training_summary}.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4cm}p{3cm}p{7cm}}
+\toprule
+Setting & Value & Reason \\
+\midrule
+Optimizer & AdamW & Adaptive gradient-based optimization with weight decay. \\
+Learning rate & $5\times10^{-4}$ & Conservative value for stable LSTM training. \\
+Dropout & 0.10 & Mild regularization to reduce overfitting. \\
+Weight decay & $10^{-5}$ & Penalizes unnecessarily large weights. \\
+Gradient clipping & 1.0 & Limits large recurrent gradients during training. \\
+Early stopping & Validation-based & Stops training when validation performance no longer improves. \\
+\bottomrule
+\end{tabular}
+\caption{High-level training settings.}
+\label{tab:training_summary}
+\end{table}
+
+\begin{trainbox}{AdamW optimizer}
+AdamW was used to update the trainable LSTM parameters during training. Let
+\[
+\theta=\{W,b\}
+\]
+denote the network weights and biases. At each iteration, AdamW updates the parameters using gradient information from the loss:
+\[
+\theta_{k+1}
+=
+\theta_k
+-
+\eta\,\widehat{m}_k
+-
+\eta\,\lambda_w\,\theta_k .
+\]
+Here, $\eta$ is the learning rate, $\widehat{m}_k$ represents the adaptive Adam gradient update, and $\lambda_w$ is the weight-decay coefficient. The adaptive term supports stable training, while the weight-decay term discourages unnecessarily large weights and reduces overfitting risk.
+\end{trainbox}
+
+
+\section{Simulation Results}
+This section presents the main simulation results.
+
+\subsection{Training and Validation Loss}
+\begin{figure}[H]
+\centering
+\safefig[width=0.75\textwidth]{training_validation_loss_two_chirps_balanced.png}
+\caption{Training and validation loss for the two-chirp LSTM training. The validation loss decreases and remains stable rather than diverging from the training loss.}
+\label{fig:loss}
+\end{figure}
+
+\subsection{Representative Test Predictions}
+\begin{figure}[H]
+\centering
+\safefig[width=0.85\textwidth]{prediction_Chirp_1_block00_test_two_chirps_balanced.png}
+\caption{Representative prediction result for \texttt{Chirp\_1}. The plot compares the measured and predicted displacement and Lorentz force on a test block.}
+\label{fig:pred_chirp1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.85\textwidth]{prediction_Chirp_2_block00_test_two_chirps_balanced.png}
+\caption{Representative prediction result for \texttt{Chirp\_2}. The model is evaluated on a test block that was not used during weight updates.}
+\label{fig:pred_chirp2}
+\end{figure}
+
+\subsection{Representative Prediction Errors}
+\begin{figure}[H]
+\centering
+\safefig[width=0.85\textwidth]{error_Chirp_1_block00_test_two_chirps_balanced.png}
+\caption{Prediction error for \texttt{Chirp\_1}, calculated as measured output minus predicted output.}
+\label{fig:err_chirp1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.85\textwidth]{error_Chirp_2_block00_test_two_chirps_balanced.png}
+\caption{Prediction error for \texttt{Chirp\_2}, calculated as measured output minus predicted output.}
+\label{fig:err_chirp2}
+\end{figure}
+
+\section{Summary of What Was Implemented}
+Table~\ref{tab:traceability} summarizes the connection between the reference-paper concepts and the implemented simulation.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4.1cm}p{4.6cm}p{5.8cm}}
+\toprule
+Paper concept & Implementation in this simulation & Purpose \\
+\midrule
+Discrete dynamic system \cite{wang2017} & Resampled time-series data indexed by $k$ & Converts the actuator measurements into a next-step prediction format. \\
+Series-parallel identification \cite{wang2017} & Input vector includes $[I,x,F]$ history & Uses measured output history during training. \\
+LSTM memory \cite{wang2017} & Two-layer LSTM model & Captures temporal dependencies in the actuator response. \\
+Sequential data learning \cite{ogunmolu2016} & Sliding windows of 120 samples & Uses time-history windows instead of isolated rows. \\
+MSE regression \cite{ogunmolu2016} & Weighted multi-output MSE & Minimizes displacement and force prediction errors. \\
+Separated evaluation \cite{ogunmolu2016} & Train/validation/test blocks & Evaluates prediction performance on unseen windows. \\
+\bottomrule
+\end{tabular}
+\caption{High-level traceability between reference papers and the implemented model.}
+\label{tab:traceability}
+\end{table}
+
+\section{Conclusion}
+An LSTM-based series-parallel dynamic identifier was implemented for actuator displacement and Lorentz-force prediction using two chirp experiments. The model uses recent histories of coil current, displacement, and force to predict the next actuator response. The main theoretical basis comes from LSTM-based dynamic system identification and sequential neural-network system identification. The main hyperparameters were selected to balance learning capacity, training stability, and overfitting risk for the available data. The results show that the trained model follows the measured actuator response on unseen test windows, while the error plots show the remaining mismatch.
+
+This work uses only two chirp experiments. Therefore, the model should be viewed as an initial data-driven identifier rather than a fully validated actuator model. Future work should include more experiments with different amplitudes, frequencies, operating conditions, and possibly PRBS or step inputs for stronger generalization testing.
+
+\begin{thebibliography}{9}
+\bibitem{wang2017}
+Y. Wang, ``A New Concept using LSTM Neural Networks for Dynamic System Identification,'' \textit{Proceedings of the American Control Conference}, Seattle, WA, USA, 2017, pp. 5324--5329.
+
+\bibitem{ogunmolu2016}
+O. Ogunmolu, X. Gu, S. Jiang, and N. Gans, ``Nonlinear Systems Identification Using Deep Dynamic Neural Networks,'' arXiv:1610.01439, 2016.
+\end{thebibliography}
+
+\end{document}
