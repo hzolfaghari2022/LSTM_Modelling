@@ -1,0 +1,26 @@
+Final Single Actuator ESA LSTM Model Summary
+===========================================
+
+Input: current history window
+Outputs: displacement and coil force
+Sequence length: 30
+LSTM layers: 2
+Hidden units per LSTM layer: 96
+Fully connected hidden units: 48
+Dropout: 0.1
+Smoothing used for training: False
+
+Scientific note: With only one COMSOL experiment, this model demonstrates within-trajectory learning. Additional input profiles are required for generalization.
+
+rmse_disp_train: 0.78713175
+rmse_disp_val: 0.94194789
+rmse_disp_test: 0.95714397
+mae_disp_test: 0.64485227
+nrmse_disp_test: 28.740465
+r2_disp_test: -0.022489565
+rmse_force_train: 0.0064843499
+rmse_force_val: 0.0081252004
+rmse_force_test: 0.0078802035
+mae_force_test: 0.0056250035
+nrmse_force_test: 29.014431
+r2_force_test: -0.034487686

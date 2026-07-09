@@ -1,0 +1,8 @@
+Improved Chirp LSTM/NARX Model Latest Run
+=========================================
+Run time: 2026-06-26 14:42:56
+Script: Final_Chirp_LSTM_NARX_GitHub.py
+Results folder: Chirp_LSTM_NARX_Results
+Excel source: C:\Users\hzlfghri\OneDrive - The University of Memphis\The University of Memphis\My Research\New Project on LSTM\Code\Chrip input\Chirp_Input.xlsx
+Repository: git@github.com:hzolfaghari2022/LSTM_Modelling.git
+Target folder: Improved_Chirp_LSTM_NARX_Model

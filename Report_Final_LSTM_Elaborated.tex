@@ -1,0 +1,997 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage[most]{tcolorbox}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{float}
+\usepackage{enumitem}
+
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+
+\definecolor{boxbg}{RGB}{247,249,252}
+\definecolor{boxframe}{RGB}{40,80,140}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{decisionblue}{RGB}{231,243,255}
+\definecolor{decisionblueframe}{RGB}{23,88,156}
+\definecolor{decisiongreen}{RGB}{232,248,239}
+\definecolor{decisiongreenframe}{RGB}{31,122,65}
+\definecolor{decisionyellow}{RGB}{255,248,220}
+\definecolor{decisionyellowframe}{RGB}{176,126,0}
+\definecolor{decisionpurple}{RGB}{244,238,255}
+\definecolor{decisionpurpleframe}{RGB}{103,71,170}
+\definecolor{decisionred}{RGB}{255,239,239}
+\definecolor{decisionredframe}{RGB}{170,50,50}
+\definecolor{decisiongray}{RGB}{247,247,247}
+\definecolor{decisiongrayframe}{RGB}{90,90,90}
+
+\lstdefinestyle{pythonstyle}{
+    language=Python,
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{blue!70!black},
+    stringstyle=\color{green!40!black},
+    backgroundcolor=\color{codebg},
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    columns=fullflexible,
+    keepspaces=true,
+    tabsize=4
+}
+
+\newtcolorbox{paperbox}[1]{
+    enhanced,
+    colback=boxbg,
+    colframe=boxframe,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.8pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newtcolorbox{implementationbox}[1]{
+    enhanced,
+    colback=white,
+    colframe=black!60,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.6pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newtcolorbox{architecturedecisionbox}[1]{
+    enhanced,
+    breakable,
+    colback=decisionblue,
+    colframe=decisionblueframe,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.9pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newtcolorbox{datadecisionbox}[1]{
+    enhanced,
+    breakable,
+    colback=decisiongreen,
+    colframe=decisiongreenframe,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.9pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newtcolorbox{trainingdecisionbox}[1]{
+    enhanced,
+    breakable,
+    colback=decisionyellow,
+    colframe=decisionyellowframe,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.9pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newtcolorbox{paperdecisionbox}[1]{
+    enhanced,
+    breakable,
+    colback=decisionpurple,
+    colframe=decisionpurpleframe,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.9pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newtcolorbox{cautiondecisionbox}[1]{
+    enhanced,
+    breakable,
+    colback=decisionred,
+    colframe=decisionredframe,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.9pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newtcolorbox{parameterdecisionbox}[1]{
+    enhanced,
+    breakable,
+    colback=decisiongray,
+    colframe=decisiongrayframe,
+    title={#1},
+    fonttitle=\bfseries,
+    arc=2mm,
+    boxrule=0.9pt,
+    left=2mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm
+}
+
+\newcommand{\vect}[1]{\mathbf{#1}}
+
+\graphicspath{{./}{figures/}}
+
+% Robust figure inclusion: first checks the current folder, then the figures/ folder.
+% This prevents missing figures when the PNG files are uploaded beside the .tex file in Overleaf.
+\newcommand{\safefig}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{%
+    \IfFileExists{figures/#2}{\includegraphics[#1]{figures/#2}}{%
+      \fbox{\begin{minipage}{0.88\linewidth}\centering Missing figure file: \texttt{#2}\end{minipage}}%
+    }%
+  }%
+}
+
+
+\title{LSTM-Based Dynamic System Identification of Actuator Response Using Two Chirp Experiments}
+\author{Hussein Zolfaghari}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+
+\begin{abstract}
+This report presents an LSTM-based dynamic system identification procedure for predicting actuator displacement and Lorentz force from two chirp experiments. The report is written to show exactly how selected ideas from the two reference papers were translated into the simulation. From Wang \cite{wang2017}, I used the discrete-time dynamic-system representation, the input-output/series-parallel identification structure, and the motivation for using LSTM memory in dynamic system identification. From Ogunmolu et al. \cite{ogunmolu2016}, I used the trend of training deep dynamic neural networks on sequential input-output data, minimizing an MSE-type regression loss, and evaluating the learned model on separated validation and test data. The implemented model uses a two-layer LSTM with 64 hidden units, a nonlinear prediction head, weighted multi-output MSE loss, block-based train/validation/test splitting, early stopping, learning-rate scheduling, and separate prediction/error plots for each test block. In this report, I explicitly justify each of these choices. The reference papers motivate the use of LSTM, sequential input-output data, series-parallel identification, and MSE-based learning; however, numerical choices such as two LSTM layers, 64 hidden units, 120-sample sequences, dropout, and learning rate are treated as implementation hyperparameters selected for this specific two-chirp actuator dataset.
+\end{abstract}
+
+
+\section{Objective of the Simulation}
+The objective of this simulation is to learn a discrete-time dynamic model of the actuator using measured time-series data. The available dataset contains two chirp experiments, named \texttt{Chirp\_1} and \texttt{Chirp\_2}. At each sampled time, the dataset contains time, displacement, coil current, and Lorentz force. The learned model is used to estimate the next-step displacement and force.
+
+\begin{datadecisionbox}{What \texttt{Chirp\_1} and \texttt{Chirp\_2} mean in this dataset}
+\texttt{Chirp\_1} and \texttt{Chirp\_2} are two separate experimental records of the same actuator under chirp-type excitation. They are not two different outputs. Each sheet is one time-series experiment, and each row after cleaning/resampling represents one sampled time instant. For every sampled time, the available variables are time $t$, coil current $I$, displacement $x$, and Lorentz force $F$. Since only two chirp experiments are available, both chirps are used in the train/validation/test procedure instead of reserving one whole chirp only for testing.
+\end{datadecisionbox}
+
+The final implemented model is a series-parallel LSTM model. At each time step inside a sequence, the model receives
+\begin{equation}
+\vect{s}(k) = \left[I(k), x(k), F(k)\right]^T,
+\end{equation}
+where $I(k)$ is coil current, $x(k)$ is displacement, and $F(k)$ is Lorentz force. The model predicts
+\begin{equation}
+\hat{\vect{y}}(k+1)=\left[\hat{x}(k+1), \hat{F}(k+1)\right]^T.
+\end{equation}
+This structure was selected because the actuator response is dynamic: the next displacement and force depend not only on the present current but also on the recent state history of the system.
+
+\subsection{Summary of the Main Modeling Choices}
+Before presenting the literature connection, I summarize the main implementation choices because these choices define the final simulation. The most important point is that the papers support the \emph{type} of model used here, but they do not uniquely determine every numerical hyperparameter. Therefore, the model settings were selected as engineering choices for the available dataset.
+
+\begin{parameterdecisionbox}{What I mean by ``engineering choices''}
+In this report, an engineering choice means a modeling or training hyperparameter selected for this specific dataset, not a fixed number copied from the papers. Examples are the sequence length, number of LSTM layers, hidden size, dropout, learning rate, and loss weights. These choices were selected by considering the available data size, the nonlinear actuator behavior, the risk of overfitting, and the validation/test results. The papers justify the modeling direction; the dataset and validation behavior determine the final numerical settings.
+\end{parameterdecisionbox}
+
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{3.6cm}p{2.6cm}p{8.0cm}}
+\toprule
+Choice & Selected value & Why this value was used in this simulation \\
+\midrule
+Input structure & Series-parallel & This follows Wang's series-parallel identification idea: measured output history is used during training together with input history. For my data, the input vector is $[I(k),x(k),F(k)]$, not current alone. \\
+Sequence length & 120 samples & With $\Delta t=0.002$ s, this gives a 0.24 s history window. This was selected to give the LSTM enough recent actuator history while keeping the number of windows and training cost reasonable. \\
+LSTM layers & 2 layers & One layer may be too shallow for nonlinear actuator dynamics, while more than two layers would add many parameters for only two chirp experiments. Two layers were used as a moderate-depth recurrent model. \\
+Hidden units & 64 & The hidden state is the internal memory dimension. 64 units provide more capacity than 16 or 32 units, but avoid the much larger parameter count of 128 or 256 units. \\
+Output dimension & 2 & The model predicts next-step displacement and Lorentz force. \\
+Loss function & Weighted MSE & This is based on the MSE idea in Ogunmolu et al., extended to two outputs. A larger weight is used for displacement because it was more difficult to identify. \\
+Regularization & Dropout 0.10 and weight decay $10^{-5}$ & These reduce overfitting because the dataset has only two chirp experiments. \\
+Model selection & Best validation loss & The final model is selected from the epoch with the lowest validation loss, not simply the last training epoch. \\
+\bottomrule
+\end{tabular}
+\caption{Important modeling choices that were selected before training the LSTM.}
+\label{tab:main_choices}
+\end{table}
+
+\begin{datadecisionbox}{How one LSTM data sample/window is created}
+One training example is not one isolated row of the Excel file. After resampling, the code uses \texttt{seq\_len=120}, so one input example contains 120 consecutive sampled rows, and the target is the next row. In simple notation,
+\begin{equation}
+\{1,2,\ldots,120\}\rightarrow 121,
+\qquad
+\{2,3,\ldots,121\}\rightarrow 122,
+\end{equation}
+for validation and testing, where stride 1 is used. During training, the default stride is 2, so the training windows move forward by two samples to reduce repeated windows and training cost. In Python indexing, this is implemented as \texttt{features[start:end]} for the 120-sample input and \texttt{outputs[target\_index]} with \texttt{target\_index=end} for the next-step output.
+\end{datadecisionbox}
+
+\begin{trainingdecisionbox}{Why the 120-sample window corresponds to 0.24 s}
+Both chirps are resampled to $\Delta t=0.002$ s. Therefore, a sequence length of 120 samples gives
+\begin{equation}
+120\times0.002=0.24\;\text{s}.
+\end{equation}
+This 0.24 s window was chosen as a moderate memory length. It gives the LSTM recent actuator history to learn phase delay and dynamic dependence between current, displacement, and force. A much shorter window could miss part of the recent actuator response, while a much longer window would increase training cost and add many highly redundant samples for only two chirp experiments.
+\end{trainingdecisionbox}
+
+\subsection{Highlighted Key Information for Quick Review}
+The following colored boxes summarize the modeling decisions that are important for reading and presenting this report. I included them so the reader can quickly see not only \emph{what} was selected, but also \emph{why} each choice was selected.
+
+\begin{paperdecisionbox}{Important distinction: what came from the papers and what was selected for my dataset}
+The two reference papers motivate the modeling trend: discrete-time dynamic system identification, series-parallel input-output modeling, recurrent/LSTM memory, sequential data training, and MSE-based regression. However, the papers do not prescribe that my actuator model must use exactly 2 layers, 64 hidden units, 120 samples, or a specific learning rate. Those are hyperparameters selected for this two-chirp actuator dataset based on model capacity, nonlinear dynamics, and overfitting risk.
+\end{paperdecisionbox}
+
+\begin{datadecisionbox}{Data decision: why both chirps were used in train, validation, and test}
+The dataset contains only two chirp experiments. Therefore, training only on one chirp and testing only on the other would mainly test mismatch between experiments, not just the quality of the LSTM model. To make the problem fairer, each chirp was divided into blocks, and each block was split into 70\% training, 15\% validation, and 15\% testing. This keeps both chirp experiments represented in all stages while still keeping validation and test windows separate from the training updates.
+\end{datadecisionbox}
+
+\begin{architecturedecisionbox}{Architecture decision: why 2 LSTM layers}
+The two-layer LSTM was selected as a balance between learning capacity and overfitting risk. One LSTM layer may be enough for simple dynamics, but the actuator has nonlinear current-displacement-force behavior. The first LSTM layer learns low-level temporal patterns from the current, displacement, and force history. The second LSTM layer learns a higher-level dynamic representation from those temporal features. More than two layers would add many more parameters, but only two chirp experiments are available; therefore, a deeper model could memorize the training windows and overfit.
+\end{architecturedecisionbox}
+
+\begin{architecturedecisionbox}{Architecture decision: why 64 hidden units}
+The hidden units define the size of the LSTM memory vector. A hidden size of 16 or 32 may be too small to represent the nonlinear actuator dynamics. A hidden size of 128 or 256 may be too large for only two chirp datasets and may memorize the training windows instead of generalizing. Therefore, 64 hidden units were selected as a middle choice: enough capacity to learn nonlinear temporal behavior, but not excessively large for the available data.
+\end{architecturedecisionbox}
+
+\begin{parameterdecisionbox}{Parameter-count implication}
+With three input features, two LSTM layers, 64 hidden units, and a two-output prediction head, the model has approximately 55,234 trainable parameters. Increasing the hidden size to 128 would increase the parameter count strongly, not just slightly, because LSTM parameters grow with both input size and hidden size. This is why a moderate hidden size was selected.
+\end{parameterdecisionbox}
+
+\begin{trainingdecisionbox}{Training decision: why weighted MSE was used}
+The model predicts two physical quantities: displacement and Lorentz force. Earlier simulations showed that displacement was harder to identify than force. Therefore, I used a weighted MSE loss with a larger displacement weight. This keeps the MSE regression idea from Ogunmolu et al., but adapts it to a two-output actuator-identification problem.
+\end{trainingdecisionbox}
+
+\begin{cautiondecisionbox}{Validation-loss interpretation}
+Validation MSE is not required to be smaller than training MSE. Training MSE is usually lower because the network directly updates its weights using training windows. The goal is for validation MSE to decrease, stay stable, and remain reasonably close to training MSE. A large gap would suggest overfitting, which is why dropout, weight decay, early stopping, and learning-rate scheduling were used.
+\end{cautiondecisionbox}
+
+
+\section{How the Reference Papers Were Used in the Simulation}
+This section is the main link between the theory in the two papers and the Python simulation. I do not claim that the code reproduces every part of the papers. Instead, I selected the parts that are directly useful for my actuator data and converted them into implementation steps. Each subsection below has the same structure: first, the exact paper equation or short phrase is shown in a box; second, I explain exactly how that idea appears in the simulation code.
+
+\subsection{Discrete Dynamic-System Representation from Wang}
+\begin{paperbox}{Paper part used as the dynamic-system starting point \cite{wang2017}}
+\begin{equation}
+ x(k)=f\left[x(k-1),\ldots,x(k-n),u(k-1),\ldots,u(k-m)\right],
+ \qquad y(k)=g[x(k)].
+\end{equation}
+\end{paperbox}
+
+\begin{implementationbox}{How this was used in my simulation}
+The actuator data are measured at sampled time instants, so the simulation is not treated as a static curve fitting problem. After resampling, each row of the data corresponds to a discrete time index $k$. The code therefore learns a discrete-time map from a recent history of samples to the next output sample:
+\begin{equation}
+\left\{I(k-119:k),x(k-119:k),F(k-119:k)\right\}
+\longrightarrow
+\left[x(k+1),F(k+1)\right].
+\end{equation}
+This is why the code creates windows with \texttt{seq\_len=120}. In the code, this theory appears in \texttt{make\_windows\_from\_dataframe}: \texttt{X\_list.append(features[start:end])} stores the past sequence, and \texttt{Y\_list.append(outputs\_scaled[target\_index])} stores the next displacement-force target.
+\end{implementationbox}
+
+\subsection{Input-Output Form of the Nonlinear Dynamic Model from Wang}
+\begin{paperbox}{Paper equation used to justify using past input-output samples \cite{wang2017}}
+\begin{equation}
+ y(k)=f\left(y(k-1),\ldots,y(k-n);u(k-1),\ldots,u(k-m)\right).
+\end{equation}
+\end{paperbox}
+
+\begin{implementationbox}{How this was used in my simulation}
+The paper writes the model for a single-output system. My actuator simulation extends the same idea to two outputs:
+\begin{equation}
+\vect{y}(k)=\begin{bmatrix}x(k)\\F(k)\end{bmatrix},
+\qquad u(k)=I(k).
+\end{equation}
+Therefore, the learned model is not just current-to-displacement or current-to-force. It is a nonlinear dynamic input-output model where the next displacement and force are estimated from the recent input-output history. This is the reason the default input mode is \texttt{series\_parallel}, not \texttt{current\_only}.
+\end{implementationbox}
+
+\subsection{Series-Parallel Identification Model from Wang}
+\begin{paperbox}{Paper part used for the identification structure \cite{wang2017}}
+\centering
+``series-parallel model''
+\begin{equation}
+\hat{y}(k)=N_y\left[y(k-1),\ldots,y(k-n)\right]
++N_u\left[u(k-1),\ldots,u(k-m)\right].
+\end{equation}
+\end{paperbox}
+
+\begin{implementationbox}{How this was used in my simulation}
+This is the most direct connection between Wang's paper and the implemented code. In a series-parallel model, measured plant outputs are used as part of the estimator input during training. In the code, this is implemented by the line
+\begin{equation}
+\texttt{features = np.hstack([current\_scaled, outputs\_scaled])}.
+\end{equation}
+That line forms the LSTM input as
+\begin{equation}
+\vect{s}(k)=\left[I(k),x(k),F(k)\right]^T.
+\end{equation}
+Thus, the estimator uses both the input history $u(k)$ and the measured output history $y(k)$. This is why the model is a one-step-ahead identifier: it learns to predict $\hat{x}(k+1)$ and $\hat{F}(k+1)$ using measured histories up to time $k$. This follows the series-parallel trend of the paper and avoids asking the model to free-run using only its own previous predictions.
+\end{implementationbox}
+
+\begin{paperdecisionbox}{What Wang considered and what is similar in my simulation}
+Wang considered a discrete-time nonlinear input-output identification problem where the estimator uses past inputs and past measured outputs. In Wang's notation, the single output $y(k)$ is estimated from histories of $y$ and $u$. In my simulation, the same idea is used in a multi-output form: the input is coil current $I(k)$, and the measured outputs are displacement $x(k)$ and Lorentz force $F(k)$. Therefore, the LSTM input history is $[I,x,F]$, and the target is the next output vector $[x(k+1),F(k+1)]$. The similarity is the use of discrete-time input-output history and measured output feedback during training. The difference is that my implementation predicts two outputs and does not implement Wang's convex multi-LSTM cluster.
+\end{paperdecisionbox}
+
+\subsection{LSTM Motivation from Wang}
+\begin{paperbox}{Paper phrases used as LSTM motivation \cite{wang2017}}
+\centering
+``vanishing gradient issue'' \qquad ``input gate'' \qquad ``output gate'' \qquad ``forget gate''
+\end{paperbox}
+
+\begin{implementationbox}{How this was used in my simulation}
+A conventional RNN can have difficulty learning long time dependencies because of the vanishing-gradient problem. The chirp response is a sequence, and the current output depends on previous samples. Therefore, I used \texttt{nn.LSTM} instead of a simple feedforward network. In PyTorch, \texttt{nn.LSTM} internally implements the recurrent memory state and the input, forget, and output gates. The code uses two stacked LSTM layers with 64 hidden units. The first layer extracts temporal features from the sequence, and the second layer gives additional dynamic representation capacity while keeping the model size reasonable for only two chirp experiments.
+\end{implementationbox}
+
+\subsection{Sequential-Data Training from Ogunmolu et al.}
+\begin{paperbox}{Paper phrase used to justify sequential learning \cite{ogunmolu2016}}
+\centering
+``trained on sequential data''
+\end{paperbox}
+
+\begin{implementationbox}{How this was used in my simulation}
+The samples were not treated as independent random points. First, each chirp was kept as a time sequence. Then the code generated sliding windows from that sequence. This follows the same trend as Ogunmolu et al.: using recurrent/deep dynamic neural networks to learn system behavior from sequential input-output data. In the code, this happens before the \texttt{DataLoader}; the \texttt{DataLoader} receives windows shaped as \texttt{[batch, sequence, features]}.
+\end{implementationbox}
+
+\subsection{MSE-Based Regression Objective from Ogunmolu et al.}
+\begin{paperbox}{Paper cost-function structure used for regression training \cite{ogunmolu2016}}
+\begin{equation}
+ l(\hat{y},y)=\frac{1}{2n}\sum_{k=1}^{K}\sum_{i=1}^{n}\left\|\hat{y}_i(k)-y_i(k)\right\|^2.
+\end{equation}
+\centering
+``mean-squared error''
+\end{paperbox}
+
+\begin{implementationbox}{How this was used in my simulation}
+The code uses the same basic idea: the model prediction is compared with the measured output, and the squared error is minimized by backpropagation. Since my model has two outputs, I used a weighted multi-output MSE:
+\begin{equation}
+\mathcal{L}=\frac{1}{N}\sum_{j=1}^{N}\left[w_x\left(\hat{x}_j-x_j\right)^2+w_F\left(\hat{F}_j-F_j\right)^2\right].
+\end{equation}
+The default weights are $w_x=2.0$ and $w_F=1.0$. This is not a different theory; it is a practical extension of MSE for two physical outputs. A higher displacement weight was used because displacement was harder to identify than force in the earlier runs.
+\end{implementationbox}
+
+\subsection{Training, Validation, and Testing from Ogunmolu et al.}
+\begin{paperbox}{Paper phrase used to justify separated evaluation \cite{ogunmolu2016}}
+\centering
+``training data generalizes to testing data''
+\end{paperbox}
+
+\begin{implementationbox}{How this was used in my simulation}
+Ogunmolu et al. separated data for training and testing to evaluate whether the learned dynamic model generalizes. I used the same principle, but modified the split because my dataset has only two chirp experiments. If one entire chirp were used only for training and the other only for testing, the split would be too severe and would mainly test experiment-to-experiment mismatch. Therefore, each chirp is divided into blocks, and each block is split into 70\% training, 15\% validation, and 15\% testing. This keeps both chirps represented during training, validation, and testing while still ensuring that test windows are not used for weight updates.
+\end{implementationbox}
+
+\subsection{Important Boundary of the Implementation}
+\begin{implementationbox}{What was not implemented}
+Wang also introduces a convex-based multi-LSTM structure with adaptive convex coefficients. That part was not implemented in this simulation. The part used from Wang is the dynamic-system formulation, the series-parallel identification structure, and the LSTM motivation. Therefore, the report should be understood as an LSTM-based series-parallel dynamic identifier, not as a reproduction of the full convex-based LSTM cluster.
+\end{implementationbox}
+
+
+\section{Dataset Usage and Preprocessing}
+The Excel file is read sheet by sheet. The two valid experiments are \texttt{Chirp\_1} and \texttt{Chirp\_2}. For each sheet, the code finds the header row, extracts the time, displacement, current, and force columns, converts them to numeric values, removes invalid rows, and resamples the signals using linear interpolation.
+
+\begin{datadecisionbox}{How the two chirp records were used as data}
+Each chirp sheet is treated as one measured time sequence. The model is not trained using single independent rows. Instead, each chirp is converted into many overlapping sequence windows. Each window contains 120 consecutive sampled instants of $I$, $x$, and $F$, and the corresponding target is the next measured displacement-force vector. This is the practical conversion from the experimental time-series data to supervised LSTM training data.
+\end{datadecisionbox}
+
+\subsection{Why Resampling Was Used}
+\begin{datadecisionbox}{Why the data were resampled to a common time step}
+The discrete-time formulation in Wang's paper uses the sample index $k$. For this index to have the same physical meaning in both chirp experiments, the time step should be consistent. Therefore, both chirps are resampled to a common sampling interval
+\begin{equation}
+\Delta t = 0.002 \; \text{s}.
+\end{equation}
+After this step, moving from $k$ to $k+1$ means moving forward by the same amount of time in both chirps. This makes the LSTM window length physically consistent. Because the selected LSTM sequence length is 120, the physical time history seen by the model is $120\Delta t=0.24$ s. I selected this as a moderate window: long enough to include recent actuator memory and phase information, but short enough to avoid unnecessary computation and excessive repeated information.
+\end{datadecisionbox}
+
+\subsection{How Sample Times Become LSTM Training Examples}
+\begin{datadecisionbox}{Number of sample times used in each identification example}
+For system identification, the code uses 120 sample times as the input history and one next sample time as the target. Therefore, one supervised example uses 121 sampled instants in total: 120 instants for the input sequence and the following instant for the output target. For example,
+\begin{equation}
+[I(1:120),x(1:120),F(1:120)] \rightarrow [x(121),F(121)].
+\end{equation}
+The next validation/test example shifts by one sample:
+\begin{equation}
+[I(2:121),x(2:121),F(2:121)] \rightarrow [x(122),F(122)].
+\end{equation}
+This is exactly the discrete-time system-identification idea from Wang: the next output is learned from recent input-output history. The paper uses generic histories $u(k-1),\ldots,u(k-m)$ and $y(k-1),\ldots,y(k-n)$; in my code, the chosen history length is 120 samples.
+\end{datadecisionbox}
+
+\subsection{Training, Validation, and Test Split}
+\begin{datadecisionbox}{Why I used a block-based split instead of one-chirp training}
+The train/validation/test strategy is connected to the evaluation philosophy in Ogunmolu et al., where learned models are judged by their performance on separated data. Because only two chirp experiments are available, I used a block-based split instead of a full experiment split:
+\begin{itemize}[leftmargin=1.5em]
+    \item Each chirp is divided into blocks of length \texttt{block\_len=2500} samples.
+    \item Inside each block, the first 70\% is used for training.
+    \item The next 15\% is used for validation.
+    \item The final 15\% is used for testing.
+    \item Windows from \texttt{Chirp\_1} and \texttt{Chirp\_2} are balanced so that one chirp does not dominate training.
+\end{itemize}
+This split is directly tied to the limited dataset size. It still gives unseen validation and test windows, but it avoids training only on one operating condition and testing only on another.
+\end{datadecisionbox}
+
+\subsection{Normalization}
+The current input is normalized using only the training portions. The output variables, displacement and force, are also normalized using only the training portions. The validation and test data are transformed using the same training scalers. This is important because the MSE-based training from Ogunmolu et al. is a numerical optimization problem; variables with different physical scales can make the optimization harder. Using training-only scalers also prevents information from validation or test segments from leaking into the training stage.
+
+
+\section{LSTM Architecture}
+The implemented architecture is summarized in Table~\ref{tab:architecture_choices}. The architecture is directly connected to the two paper trends. The sequence input and measured-output feedback come from Wang's discrete and series-parallel formulation. The recurrent LSTM structure comes from the idea that dynamic systems should be learned using models that can process sequential data, as discussed by both papers.
+
+In the default \texttt{series\_parallel} mode, the input dimension is three:
+\begin{equation}
+\left[I(k),x(k),F(k)\right].
+\end{equation}
+The output dimension is two:
+\begin{equation}
+\left[\hat{x}(k+1),\hat{F}(k+1)\right].
+\end{equation}
+Therefore, the architecture is a multi-output extension of the input-output identification idea.
+
+
+\subsection{Layer Selection and Hyperparameter Justification}
+The selected default hyperparameters are listed in Table~\ref{tab:architecture_choices}. I included this table because these values are not arbitrary. Each one affects the capacity, stability, and generalization of the model.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llp{8cm}}
+\toprule
+Parameter & Value & Reason \\
+\midrule
+Sequence length & 120 & This implements the memory-length idea in discrete dynamic identification. Since $\Delta t=0.002$ s, the model receives $120\times0.002=0.24$ s of recent history. A shorter window may miss actuator memory; a much longer window increases computation and may add redundant information. \\
+Input dimension & 3 & This directly implements the series-parallel input: coil current plus measured displacement and measured force history. This is stronger than current-only training because the model receives information about the present actuator state. \\
+Number of LSTM layers & 2 & The first LSTM layer converts the raw temporal sequence into recurrent features. The second LSTM layer learns a higher-level dynamic representation from those features. One layer was considered too limited for nonlinear behavior, while three or more layers would increase overfitting risk because only two chirp experiments are available. \\
+Hidden units & 64 & The hidden size is the dimension of the LSTM memory vector at each time step. A value such as 16 or 32 may not have enough capacity to represent nonlinear displacement-force dynamics. A value such as 128 or 256 would greatly increase trainable parameters and overfitting risk. Therefore, 64 was chosen as a balanced value. \\
+Dropout & 0.10 & Dropout is applied between LSTM layers and in the prediction head to reduce overfitting. A small value was selected because the dataset is limited, but too much dropout could prevent the model from learning the detailed chirp response. \\
+Prediction head & Linear--tanh--dropout--linear & The LSTM output is passed through a small nonlinear head so that the final mapping from memory state to displacement-force output is not purely linear. \\
+Output dimension & 2 & The output is the next-step vector $[\hat{x}(k+1),\hat{F}(k+1)]^T$. \\
+\bottomrule
+\end{tabular}
+\caption{Architecture choices and their reasons.}
+\label{tab:architecture_choices}
+\end{table}
+
+\subsection{Why Two LSTM Layers Were Selected}
+\begin{architecturedecisionbox}{Why the model uses two LSTM layers}
+The two-layer structure was selected to provide a moderate amount of model depth. The first LSTM layer processes the direct sequential measurements, while the second layer processes the temporal features generated by the first layer. This is consistent with the deep dynamic neural-network trend discussed by Ogunmolu et al., but the exact number of layers is an implementation decision for this dataset. Since the dataset contains only two chirp experiments, a very deep network could reduce training error while worsening validation and test performance. Therefore, two layers were selected as a compromise between underfitting and overfitting.
+\end{architecturedecisionbox}
+
+\subsection{Why 64 Hidden Units Were Selected}
+\begin{architecturedecisionbox}{Why the model uses 64 hidden units}
+The hidden size determines how much information the LSTM can store internally. In this simulation, a hidden size of 64 means that each LSTM layer represents the recent actuator history using a 64-dimensional recurrent state. This is important because displacement and Lorentz force are nonlinear dynamic responses, not static algebraic outputs. A very small hidden size may be unable to represent the dynamics. A very large hidden size may memorize the two chirp experiments. Therefore, 64 hidden units were selected as a moderate-capacity choice.
+\end{architecturedecisionbox}
+
+\subsection{Trainable Parameter Count}
+For a PyTorch LSTM layer, the approximate number of parameters is
+\begin{equation}
+4h(d+h+2),
+\end{equation}
+where $d$ is the input dimension and $h$ is the hidden size. The factor 4 appears because the LSTM has four internal transformations: input gate, forget gate, cell/update candidate, and output gate. For the first layer, $d=3$ and $h=64$, which gives
+\begin{equation}
+4(64)(3+64+2)=17664.
+\end{equation}
+For the second layer, the input dimension is the previous hidden size, so $d=64$ and $h=64$, giving
+\begin{equation}
+4(64)(64+64+2)=33280.
+\end{equation}
+The nonlinear prediction head has 4290 parameters. Therefore, the full model has approximately
+\begin{equation}
+17664+33280+4290=55234
+\end{equation}
+trainable parameters.
+\begin{parameterdecisionbox}{Why the parameter count matters}
+This number is large enough to model nonlinear dynamic behavior, but still moderate for a two-chirp dataset. If the number of layers or hidden units were increased strongly, the training loss could become smaller, but the model would have a higher risk of memorizing the two available chirp experiments instead of learning a general actuator response.
+\end{parameterdecisionbox}
+
+\subsection{Important Clarification About the Papers}
+\begin{paperdecisionbox}{What is paper-based and what is my design choice}
+The reference papers do not state that my actuator simulation must use exactly two layers or exactly 64 hidden units. Wang's paper motivates LSTM for dynamic system identification and discusses the importance of choosing memory length and network size before identification. Ogunmolu et al. motivate deep dynamic neural networks for sequential input-output data. I used those ideas to choose an LSTM model, and then selected two layers and 64 hidden units as practical hyperparameters for my dataset.
+\end{paperdecisionbox}
+
+
+\section{Training Procedure}
+The training procedure follows supervised recurrent regression. For every input window, the network predicts the next displacement-force vector. The predicted vector is compared with the measured vector using the weighted MSE loss. This is the practical implementation of the MSE training idea from Ogunmolu et al. and the identification-error minimization idea in Wang.
+
+\subsection{Loss Function Choice}
+\begin{trainingdecisionbox}{Why weighted MSE was selected}
+The loss function is a weighted MSE:
+\begin{equation}
+\mathcal{L}=\frac{1}{N}\sum_{j=1}^{N}\left[2.0\left(\hat{x}_j-x_j\right)^2+1.0\left(\hat{F}_j-F_j\right)^2\right].
+\end{equation}
+The MSE form is used because the task is a regression problem: the output is a continuous displacement and continuous force value. The displacement weight was set to 2.0 because the earlier simulations showed that displacement was harder for the network to match than force. The force weight was kept at 1.0 so the force prediction still contributes to the objective. Both outputs are normalized before training, so the weighting is used to guide relative importance, not simply to correct units.
+\end{trainingdecisionbox}
+
+\subsection{Optimizer and Regularization Choices}
+The main training settings are:
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llp{8cm}}
+\toprule
+Training setting & Value & Reason \\
+\midrule
+Optimizer & AdamW & Adam-type adaptive learning is stable for neural-network regression, and AdamW adds decoupled weight decay for regularization. \\
+Learning rate & $5\times10^{-4}$ & A moderate value was used to avoid unstable training. A larger value can make validation loss oscillate; a smaller value trains slowly. \\
+Weight decay & $10^{-5}$ & Penalizes overly large weights and helps generalization for the small two-chirp dataset. \\
+Batch size & 256 & Gives stable gradient estimates while keeping CPU training manageable. \\
+Maximum epochs & 300 & Allows enough training time but does not force the final model to be the last epoch. \\
+Early stopping patience & 60 & Stops training if validation loss stops improving for 60 epochs. This prevents unnecessary overfitting. \\
+Scheduler & ReduceLROnPlateau & Reduces the learning rate when validation loss stops improving, allowing fine convergence. \\
+Gradient clipping & 1.0 & Prevents large recurrent gradients from destabilizing LSTM training. \\
+\bottomrule
+\end{tabular}
+\caption{Training hyperparameters and reasons.}
+\label{tab:training_choices}
+\end{table}
+
+\subsection{Why Validation Loss Is Used for Model Selection}
+The training loop has three roles. First, it updates the network weights using training windows. Second, it evaluates the model on validation windows that are not used for weight updates. Third, it saves the model state with the lowest validation loss. This explains why the final model is selected based on validation performance rather than simply the last epoch. This is consistent with the idea of checking whether the model can generalize beyond the training data.
+
+\subsection{Why Validation MSE Can Be Larger Than Training MSE}
+\begin{cautiondecisionbox}{How I interpret the train-validation loss gap}
+It is normal for validation MSE to be larger than training MSE because the model directly optimizes the training windows. The goal is not to force validation MSE below training MSE. The goal is to keep the validation MSE low, stable, and close to the training MSE. A very large gap would indicate overfitting. Therefore, dropout, weight decay, learning-rate scheduling, and early stopping were included to control this gap.
+\end{cautiondecisionbox}
+
+\section{Simulation Results and Figure Interpretation}
+
+The simulation code saves the training loss, prediction plots, and prediction-error plots using fixed filenames. In my Overleaf project, the PNG files were uploaded beside the main \texttt{.tex} file. Therefore, the report now refers to the exact filenames directly. The figure-loading command also checks the \texttt{figures/} folder as a backup.
+
+\subsection{Training and Validation Loss}
+\begin{figure}[H]
+\centering
+\safefig[width=0.88\textwidth]{training_validation_loss_two_chirps_balanced.png}
+\caption{Training and validation loss for the two-chirp balanced LSTM training. The training loss is normally lower than the validation loss because the network weights are updated directly using the training windows. The important criterion is that the validation loss decreases, remains stable, and stays reasonably close to the training loss.}
+\label{fig:loss}
+\end{figure}
+
+\subsection{Prediction Results on Test Blocks}
+The following figures compare the measured outputs and the predicted outputs on all uploaded test blocks. Each prediction figure contains two plots: displacement prediction and Lorentz-force prediction. These figures are used to evaluate whether the trained LSTM can reproduce the dynamic response of the actuator in different chirp-frequency regions.
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{prediction_Chirp_1_block00_test_two_chirps_balanced.png}
+\caption{Prediction result on \texttt{Chirp\_1}, test block 00.}
+\label{fig:pred_chirp1_block00}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{prediction_Chirp_1_block01_test_two_chirps_balanced.png}
+\caption{Prediction result on \texttt{Chirp\_1}, test block 01.}
+\label{fig:pred_chirp1_block01}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{prediction_Chirp_1_block02_test_two_chirps_balanced.png}
+\caption{Prediction result on \texttt{Chirp\_1}, test block 02.}
+\label{fig:pred_chirp1_block02}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{prediction_Chirp_1_block03_test_two_chirps_balanced.png}
+\caption{Prediction result on \texttt{Chirp\_1}, test block 03.}
+\label{fig:pred_chirp1_block03}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{prediction_Chirp_2_block00_test_two_chirps_balanced.png}
+\caption{Prediction result on \texttt{Chirp\_2}, test block 00.}
+\label{fig:pred_chirp2_block00}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{prediction_Chirp_2_block01_test_two_chirps_balanced.png}
+\caption{Prediction result on \texttt{Chirp\_2}, test block 01.}
+\label{fig:pred_chirp2_block01}
+\end{figure}
+
+\subsection{Prediction Error on Test Blocks}
+The error plots show the physical prediction error, calculated as measured output minus predicted output. For displacement, the error unit is millimeters. For Lorentz force, the error unit is newtons. These plots are important because small oscillations in the prediction plot may be difficult to see directly, while the error plot makes the remaining mismatch clearer.
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{error_Chirp_1_block00_test_two_chirps_balanced.png}
+\caption{Prediction error on \texttt{Chirp\_1}, test block 00.}
+\label{fig:err_chirp1_block00}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{error_Chirp_1_block01_test_two_chirps_balanced.png}
+\caption{Prediction error on \texttt{Chirp\_1}, test block 01.}
+\label{fig:err_chirp1_block01}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{error_Chirp_1_block02_test_two_chirps_balanced.png}
+\caption{Prediction error on \texttt{Chirp\_1}, test block 02.}
+\label{fig:err_chirp1_block02}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{error_Chirp_1_block03_test_two_chirps_balanced.png}
+\caption{Prediction error on \texttt{Chirp\_1}, test block 03.}
+\label{fig:err_chirp1_block03}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{error_Chirp_2_block00_test_two_chirps_balanced.png}
+\caption{Prediction error on \texttt{Chirp\_2}, test block 00.}
+\label{fig:err_chirp2_block00}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\safefig[width=0.95\textwidth]{error_Chirp_2_block01_test_two_chirps_balanced.png}
+\caption{Prediction error on \texttt{Chirp\_2}, test block 01.}
+\label{fig:err_chirp2_block01}
+\end{figure}
+
+
+\section{Traceability Between Paper Theory and Code Blocks}
+Table~\ref{tab:traceability} summarizes how each selected reference-paper idea was converted into a specific implementation step. This table is included to make the connection between the literature and the simulation explicit.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{3.4cm}p{3.7cm}p{7.2cm}}
+\toprule
+Reference-paper part & Code block & How it is used in this simulation \\
+\midrule
+Discrete dynamic system with past samples \cite{wang2017} & Resampling and window creation & The continuous experimental records are converted to a discrete sequence indexed by $k$; each training example uses a 120-sample history and predicts the next output. \\
+Input-output nonlinear model \cite{wang2017} & Feature and target definition & The actuator is modeled from measured input-output data: $I(k)$ is the input and $[x(k),F(k)]$ are the outputs. \\
+Series-parallel identification \cite{wang2017} & \texttt{series\_parallel} mode & Measured output history is included in the input feature vector, so the LSTM uses $[I,x,F]$ histories rather than current alone. \\
+LSTM memory and gate motivation \cite{wang2017} & \texttt{MultiOutputLSTM} & \texttt{nn.LSTM} is used to capture temporal memory and reduce the difficulty of training a conventional RNN over sequences. The selected architecture uses two LSTM layers and 64 hidden units as a moderate-capacity choice for only two chirp experiments. \\
+Sequential data training \cite{ogunmolu2016} & Sliding-window dataset & The dataset is converted into sequential windows before batching; individual rows are not treated as independent static samples. \\
+MSE regression objective \cite{ogunmolu2016} & \texttt{WeightedMSELoss} & The code minimizes squared prediction errors for displacement and force, with a larger weight on displacement. \\
+Train/test generalization \cite{ogunmolu2016} & Block train/validation/test split & Each chirp contributes to train, validation, and test groups so that performance is evaluated on unseen windows while respecting the limited amount of data. \\
+\bottomrule
+\end{tabular}
+\caption{Traceability between selected reference-paper theory and Python implementation.}
+\label{tab:traceability}
+\end{table}
+
+\appendix
+\section{Implementation Blocks Without Code Comments}
+This appendix shows the main code blocks without code comments. After each block, I explain exactly which paper idea motivated that block and how the block changes the raw chirp data into a trained dynamic identifier.
+
+\subsection{Block 1: Importing Libraries and Setting Default Paths}
+\begin{lstlisting}[style=pythonstyle]
+from __future__ import annotations
+import argparse
+import json
+import os
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Tuple
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import torch
+torch.set_num_threads(1)
+torch.backends.mkldnn.enabled = False
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
+
+DEFAULT_SAVE_DIR = Path(
+    r"C:\Users\hzlfghri\OneDrive - The University of Memphis\The University of Memphis\My Research\New Project on LSTM\Code\LSTM_Gans_Simulation"
+)
+DEFAULT_EXCEL_PATH = DEFAULT_SAVE_DIR / "Chrip_Input.xlsx"
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block is not a theory block by itself; it prepares the software tools required to implement the theory. PyTorch provides the LSTM layer used for Wang's LSTM identifier and the gradient-based training tools used for the MSE optimization described by Ogunmolu et al.
+
+\subsection{Block 2: Loading, Cleaning, and Resampling the Two Chirp Experiments}
+\begin{lstlisting}[style=pythonstyle]
+def find_header_row(raw: pd.DataFrame) -> int:
+    for row_index in range(len(raw)):
+        raw_cells = raw.iloc[row_index].tolist()
+        text_cells: List[str] = []
+        for cell in raw_cells:
+            if pd.isna(cell):
+                continue
+            text_cells.append(str(cell).strip().lower())
+        row_text = " ".join(text_cells)
+        if "time" in row_text and "displacement" in row_text and "current" in row_text and "force" in row_text:
+            return row_index
+    raise ValueError("Could not find the header row in one Excel sheet.")
+
+def resample_experiment(df: pd.DataFrame, dt: float) -> pd.DataFrame:
+    if dt <= 0:
+        return df.copy()
+    t = df["time"].to_numpy(dtype=np.float64)
+    new_t = np.arange(float(t[0]), float(t[-1]) + 0.5 * dt, dt)
+    new_df = pd.DataFrame()
+    new_df["time"] = new_t.astype(np.float32)
+    for col in ["displacement", "current", "force"]:
+        new_df[col] = np.interp(new_t, t, df[col].to_numpy(dtype=np.float64)).astype(np.float32)
+    return new_df
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block converts the raw Excel data into the discrete-time signals used by the papers. The time column becomes the sample index $k$, the coil current becomes $u(k)$, and displacement/force become the output vector $y(k)$. Resampling to a common $\Delta t$ makes the meaning of one time step consistent before the LSTM windows are generated.
+
+\subsection{Block 3: Block-Based Train/Validation/Test Split}
+\begin{lstlisting}[style=pythonstyle]
+def split_one_experiment_into_blocks(df, block_len, train_ratio, val_ratio, seq_len):
+    train_blocks, val_blocks, test_blocks = [], [], []
+    n = len(df)
+    min_segment_len = seq_len + 5
+    for start in range(0, n, block_len):
+        block = df.iloc[start:start + block_len].reset_index(drop=True)
+        if len(block) < 3 * min_segment_len:
+            continue
+        train_end = int(train_ratio * len(block))
+        val_end = int((train_ratio + val_ratio) * len(block))
+        train_df = block.iloc[:train_end].copy()
+        val_df = block.iloc[train_end:val_end].copy()
+        test_df = block.iloc[val_end:].copy()
+        if len(train_df) > min_segment_len:
+            train_blocks.append(train_df)
+        if len(val_df) > min_segment_len:
+            val_blocks.append(val_df)
+        if len(test_df) > min_segment_len:
+            test_blocks.append(test_df)
+    return train_blocks, val_blocks, test_blocks
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block implements the train/test evaluation idea from Ogunmolu et al., but adapts it to my limited dataset. Because I only have two chirps, using one full chirp for training and one full chirp for testing would mainly test mismatch between experiments. The block-based split gives unseen validation/test windows while keeping both chirps represented in all stages.
+
+\subsection{Block 4: Normalization Using Training Data Only}
+\begin{lstlisting}[style=pythonstyle]
+@dataclass
+class Scaler:
+    mean: np.ndarray
+    std: np.ndarray
+
+    def transform(self, x: np.ndarray) -> np.ndarray:
+        return (x - self.mean) / self.std
+
+    def inverse_transform(self, x: np.ndarray) -> np.ndarray:
+        return x * self.std + self.mean
+
+def fit_scaler(arrays: List[np.ndarray]) -> Scaler:
+    data = np.vstack(arrays).astype(np.float32)
+    mean = data.mean(axis=0)
+    std = data.std(axis=0)
+    std[std < 1e-12] = 1.0
+    return Scaler(mean=mean, std=std)
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block supports the MSE optimization used in the training. Current, displacement, and force have different physical units and magnitudes, so normalization makes the gradient-based training more stable. The scalers are fitted only with training data, which keeps validation and test data separate from the training process.
+
+\subsection{Block 5: Sequential Window Creation and Series-Parallel Features}
+\begin{lstlisting}[style=pythonstyle]
+def make_windows_from_dataframe(df, seq_len, window_stride, input_scaler, output_scaler, input_mode):
+    current = df[["current"]].to_numpy(dtype=np.float32)
+    outputs = df[["displacement", "force"]].to_numpy(dtype=np.float32)
+    current_scaled = input_scaler.transform(current)
+    outputs_scaled = output_scaler.transform(outputs)
+
+    if input_mode == "current_only":
+        features = current_scaled
+    elif input_mode == "series_parallel":
+        features = np.hstack([current_scaled, outputs_scaled])
+    else:
+        raise ValueError("input_mode must be current_only or series_parallel")
+
+    X_list, Y_list, idx_list = [], [], []
+    last_start = len(df) - seq_len - 1
+    for start in range(0, last_start + 1, window_stride):
+        end = start + seq_len
+        target_index = end
+        X_list.append(features[start:end])
+        Y_list.append(outputs_scaled[target_index])
+        idx_list.append(target_index)
+    return np.asarray(X_list, dtype=np.float32), np.asarray(Y_list, dtype=np.float32), np.asarray(idx_list, dtype=np.int64)
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This is the clearest implementation of Wang's discrete dynamic and series-parallel formulation. The loop over \texttt{start:end} builds a sequence history, so the model receives past samples rather than one static point. The line \texttt{features = np.hstack([current\_scaled, outputs\_scaled])} implements the series-parallel idea because measured displacement and measured force histories are included on the estimator input side. The target \texttt{outputs\_scaled[target\_index]} is the next measured output vector.
+
+\subsection{Block 6: LSTM Model Architecture}
+\begin{lstlisting}[style=pythonstyle]
+class MultiOutputLSTM(nn.Module):
+    def __init__(self, input_dim: int, hidden_size: int, num_layers: int, dropout: float):
+        super().__init__()
+        lstm_dropout = dropout if num_layers > 1 else 0.0
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=lstm_dropout,
+            batch_first=True,
+        )
+        self.head = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.Tanh(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size, 2),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        lstm_out, _ = self.lstm(x)
+        last_state = lstm_out[:, -1, :]
+        prediction = self.head(last_state)
+        return prediction
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block implements the dynamic neural estimator. Wang motivates LSTM because dynamic system identification requires memory and conventional RNNs can suffer from vanishing gradients. Ogunmolu et al. also use recurrent/deep dynamic neural networks for sequential system-identification data. Here, the LSTM processes the 120-sample history and the final hidden state is mapped to the next displacement and force.
+
+\begin{architecturedecisionbox}{Code-level design choice in this block}
+In the actual run, \texttt{num\_layers=2} and \texttt{hidden\_size=64}. These values are not copied blindly from the papers. They are selected to give the model enough recurrent capacity for nonlinear actuator dynamics while limiting overfitting risk for the two-chirp dataset.
+\end{architecturedecisionbox}
+
+\subsection{Block 7: Weighted Multi-Output MSE Loss}
+\begin{lstlisting}[style=pythonstyle]
+class WeightedMSELoss(nn.Module):
+    def __init__(self, disp_weight: float, force_weight: float):
+        super().__init__()
+        self.register_buffer("weights", torch.tensor([disp_weight, force_weight], dtype=torch.float32))
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        weights = self.weights.to(pred.device)
+        squared_error = (pred - target) ** 2
+        weighted_error = squared_error * weights
+        return weighted_error.mean()
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block implements the MSE-type regression objective from Ogunmolu et al. The term \texttt{(pred - target) ** 2} is the squared identification error. The weights extend the same MSE idea to my two-output problem by allowing displacement and force to contribute with different importance.
+
+\subsection{Block 8: Optimizer, Scheduler, and Training Loop}
+\begin{lstlisting}[style=pythonstyle]
+model = MultiOutputLSTM(input_dim=input_dim, hidden_size=args.hidden_size, num_layers=args.num_layers, dropout=args.dropout).to(device)
+criterion = WeightedMSELoss(args.disp_loss_weight, args.force_loss_weight)
+optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=20)
+
+for epoch in range(1, args.epochs + 1):
+    model.train()
+    train_losses = []
+    for xb, yb in train_loader:
+        xb = xb.to(device).float()
+        yb = yb.to(device).float()
+        optimizer.zero_grad()
+        pred = model(xb)
+        loss = criterion(pred, yb)
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        train_losses.append(float(loss.item()))
+
+    model.eval()
+    val_losses = []
+    with torch.no_grad():
+        for xb, yb in val_loader:
+            xb = xb.to(device).float()
+            yb = yb.to(device).float()
+            pred = model(xb)
+            loss = criterion(pred, yb)
+            val_losses.append(float(loss.item()))
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block is the training realization of the papers' supervised identification idea. The LSTM predicts the output, the loss compares predicted and measured outputs, \texttt{loss.backward()} computes gradients through the recurrent model, and the optimizer updates the model parameters. The validation loop is kept separate so validation loss measures generalization rather than training memorization.
+
+\subsection{Block 9: Early Stopping Based on Validation Loss}
+\begin{lstlisting}[style=pythonstyle]
+if val_loss < best_val_loss:
+    best_val_loss = val_loss
+    best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    bad_epochs = 0
+else:
+    bad_epochs += 1
+
+if bad_epochs >= args.patience:
+    print(f"Early stopping at epoch {epoch}; best val loss={best_val_loss:.6g}")
+    break
+
+if best_state is not None:
+    model.load_state_dict(best_state)
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block is linked to the train/test generalization idea. If the training loss keeps decreasing but validation loss stops improving, the model may be fitting training windows too specifically. Early stopping stores the model at the best validation epoch, so the final saved model is selected for identification performance on unseen validation data.
+
+\subsection{Block 10: Test Evaluation and Saved Results}
+\begin{lstlisting}[style=pythonstyle]
+for segment_name, df in test_group.items():
+    X_test, Y_test, target_idx = make_windows_from_dataframe(
+        df, args.seq_len, 1, input_scaler, output_scaler, args.input_mode
+    )
+    y_true, y_pred = evaluate_model(model, X_test, Y_test, output_scaler, device, args.batch_size)
+    error = y_true - y_pred
+    time = df["time"].to_numpy(dtype=np.float32)[target_idx]
+
+    disp_rmse = float(np.sqrt(np.mean(error[:, 0] ** 2)))
+    force_rmse = float(np.sqrt(np.mean(error[:, 1] ** 2)))
+    disp_fit = fit_percent(y_true[:, [0]], y_pred[:, [0]])
+    force_fit = fit_percent(y_true[:, [1]], y_pred[:, [1]])
+    total_fit = fit_percent(y_true, y_pred)
+\end{lstlisting}
+
+\noindent\textbf{Connection to the papers.}
+This block produces the final evidence for system identification. The trained model is evaluated on test windows that were not used for weight updates. The prediction plots compare measured and estimated displacement/force, and the error plots show $y(k)-\hat{y}(k)$ in physical units. This is how the report demonstrates whether the paper-inspired LSTM trend worked on my actuator data.
+
+
+\section{Files Expected in Overleaf}
+The report is now written to match the figure names that were uploaded after running the simulation. The PNG files can be uploaded either in the same folder as \texttt{Report\_Final\_LSTM.tex} or inside a folder named \texttt{figures}. The report checks both locations.
+
+The expected figure files are:
+\begin{itemize}[leftmargin=1.5em]
+    \item \texttt{training\_validation\_loss\_two\_chirps\_balanced.png}
+    \item \texttt{prediction\_Chirp\_1\_block00\_test\_two\_chirps\_balanced.png}
+    \item \texttt{prediction\_Chirp\_1\_block01\_test\_two\_chirps\_balanced.png}
+    \item \texttt{prediction\_Chirp\_1\_block02\_test\_two\_chirps\_balanced.png}
+    \item \texttt{prediction\_Chirp\_1\_block03\_test\_two\_chirps\_balanced.png}
+    \item \texttt{prediction\_Chirp\_2\_block00\_test\_two\_chirps\_balanced.png}
+    \item \texttt{prediction\_Chirp\_2\_block01\_test\_two\_chirps\_balanced.png}
+    \item \texttt{error\_Chirp\_1\_block00\_test\_two\_chirps\_balanced.png}
+    \item \texttt{error\_Chirp\_1\_block01\_test\_two\_chirps\_balanced.png}
+    \item \texttt{error\_Chirp\_1\_block02\_test\_two\_chirps\_balanced.png}
+    \item \texttt{error\_Chirp\_1\_block03\_test\_two\_chirps\_balanced.png}
+    \item \texttt{error\_Chirp\_2\_block00\_test\_two\_chirps\_balanced.png}
+    \item \texttt{error\_Chirp\_2\_block01\_test\_two\_chirps\_balanced.png}
+\end{itemize}
+
+\begin{thebibliography}{9}
+\bibitem{wang2017}
+Y. Wang, ``A New Concept using LSTM Neural Networks for Dynamic System Identification,'' \textit{Proceedings of the American Control Conference}, Seattle, WA, USA, 2017, pp. 5324--5329.
+
+\bibitem{ogunmolu2016}
+O. Ogunmolu, X. Gu, S. Jiang, and N. Gans, ``Nonlinear Systems Identification Using Deep Dynamic Neural Networks,'' arXiv:1610.01439, 2016.
+\end{thebibliography}
+
+\end{document}
