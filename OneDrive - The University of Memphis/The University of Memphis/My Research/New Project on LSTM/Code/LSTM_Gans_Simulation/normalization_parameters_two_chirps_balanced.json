@@ -20,5 +20,8 @@
   "hidden_size": 64,
   "num_layers": 2,
   "dropout": 0.1,
-  "best_val_loss": 0.0010171577305300161
+  "residual_output": true,
+  "full_tracking": true,
+  "full_eval_stride": 1,
+  "best_val_loss": 0.0007240082049975172
 }
