@@ -1,0 +1,5 @@
+experiment,zoom_index,center_time_s,window_seconds,png_file,pdf_file
+Chirp_2,1,2.3919999599456787,0.75,zoom_tracking_Chirp_2_window01_center_2.392s.png,zoom_tracking_Chirp_2_window01_center_2.392s.pdf
+Chirp_2,2,4.544000148773193,0.75,zoom_tracking_Chirp_2_window02_center_4.544s.png,zoom_tracking_Chirp_2_window02_center_4.544s.pdf
+Chirp_2,3,6.696000099182129,0.75,zoom_tracking_Chirp_2_window03_center_6.696s.png,zoom_tracking_Chirp_2_window03_center_6.696s.pdf
+Chirp_2,4,8.847999572753906,0.75,zoom_tracking_Chirp_2_window04_center_8.848s.png,zoom_tracking_Chirp_2_window04_center_8.848s.pdf
