@@ -1,0 +1,32 @@
+Approximate linear state-space model estimated from training data
+State z = [displacement, force]^T, input u = current
+
+Discrete-time approximation:
+z(k+1) = A_d z(k) + B_d u(k) + c_d
+
+A_d =
+[[0.98918239 0.21419966]
+ [0.00212776 1.59933291]]
+
+B_d =
+[[ 0.20483379]
+ [-0.35374145]]
+
+c_d =
+[[-0.03067551]
+ [ 0.00677371]]
+
+Continuous-time approximation based on finite difference:
+z_dot = A_c z + B_c u + c_c
+
+A_c =
+[[ -5.40880523 107.09983175]
+ [  1.0638823  299.66645698]]
+
+B_c =
+[[ 102.41689604]
+ [-176.87072578]]
+
+c_c =
+[[-15.33775505]
+ [  3.38685725]]
