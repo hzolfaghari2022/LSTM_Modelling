@@ -1,0 +1,7 @@
+experiment,split,segments,rows,lstm_windows,stride
+Chirp_1,Training,4,7000,3260,2
+Chirp_1,Validation,4,1500,1020,1
+Chirp_1,Testing,4,1500,1020,1
+Chirp_2,Training,3,3850,1745,2
+Chirp_2,Validation,2,750,510,1
+Chirp_2,Testing,2,750,510,1

@@ -1,0 +1,31 @@
+{
+  "input_mean": [
+    0.03864898532629013
+  ],
+  "input_std": [
+    0.08585304021835327
+  ],
+  "output_mean": [
+    -1.7276270389556885,
+    0.017649468034505844
+  ],
+  "output_std": [
+    1.4501588344573975,
+    0.031160859391093254
+  ],
+  "input_mode": "series_parallel",
+  "seq_len": 120,
+  "resample_dt": 0.002,
+  "block_len": 2500,
+  "hidden_size": 64,
+  "num_layers": 2,
+  "dropout": 0.1,
+  "residual_output": true,
+  "full_tracking": true,
+  "full_eval_stride": 1,
+  "zoom_count": 4,
+  "zoom_window_seconds": 0.75,
+  "zoom_centers": "auto",
+  "save_zoom_pdf": true,
+  "best_val_loss": 0.0007240082049975172
+}
