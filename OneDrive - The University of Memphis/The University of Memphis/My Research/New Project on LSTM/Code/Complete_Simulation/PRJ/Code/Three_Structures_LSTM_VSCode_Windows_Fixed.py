@@ -1,0 +1,2003 @@
+"""
+THREE-STRUCTURE LSTM SYSTEM IDENTIFICATION
+=============================================
+
+Run this single file directly in VS Code.
+
+Data use:
+    Development: 67, 87, 107, and 127 mA
+    Independent test: 147 mA
+
+Paper ideas:
+    Ogunmolu/Gans:
+        static nonlinear neural block -> recurrent dynamic block
+
+    Wang:
+        series-parallel training with measured output history,
+        followed by scheduled recursive rollout training
+
+Place this file in the same folder as:
+    COMSOL_07_13_2026.xlsx
+
+Then open this file in VS Code and click "Run Python File".
+"""
+
+from __future__ import annotations
+
+# ---------------------------------------------------------------------
+# 0. AUTOMATIC PACKAGE CHECK
+# ---------------------------------------------------------------------
+
+import importlib.util
+import subprocess
+import sys
+
+REQUIRED_PACKAGES = {
+    "numpy": "numpy",
+    "matplotlib": "matplotlib",
+    "openpyxl": "openpyxl",
+    "torch": "torch",
+}
+
+missing_packages = [
+    pip_name
+    for import_name, pip_name in REQUIRED_PACKAGES.items()
+    if importlib.util.find_spec(import_name) is None
+]
+
+if missing_packages:
+    print("Installing missing packages:", ", ".join(missing_packages))
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", *missing_packages]
+    )
+
+
+# ---------------------------------------------------------------------
+# 1. IMPORTS AND USER SETTINGS
+# ---------------------------------------------------------------------
+
+import copy
+import csv
+import json
+import os
+import random
+import re
+import shutil
+import tempfile
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import openpyxl
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+
+
+# Main settings. These are the values you may change.
+WINDOW = 120
+HIDDEN_SIZE = 64
+STATIC_SIZE = 24
+
+SERIES_EPOCHS = 15
+SERIES_PARALLEL_EPOCHS = 15
+PARALLEL_EPOCHS = 8
+PARALLEL_HORIZON = 50
+
+BATCH_SIZE = 256
+ROLLOUT_BATCH_SIZE = 32
+LEARNING_RATE = 1e-3
+ROLLOUT_LEARNING_RATE = 1e-4
+
+TRAIN_COLOR = "#1f77b4"
+VALIDATION_COLOR = "#ff7f0e"
+TEST_COLOR = "#2ca02c"
+
+BLOCK_SIZE = 1000
+VALIDATION_FRACTION = 0.20
+TRAIN_STRIDE = 10
+VALIDATION_STRIDE = 5
+ROLLOUT_STRIDE = 100
+
+RANDOM_SEED = 123
+
+DEVELOPMENT_SHEETS = [
+    "DC_Offset_67mA",
+    "DC_Offset_87mA",
+    "DC_Offset_107mA",
+    "DC_Offset_127mA",
+]
+TEST_SHEET = "DC_Offset_147mA"
+
+# Set QUICK_MODE = True only to check that the program works.
+# Keep it False for the final simulation.
+QUICK_MODE = os.environ.get("QUICK_MODE", "0") == "1"
+
+ROOT = Path(__file__).resolve().parent
+torch.set_num_threads(max(1, min(4, os.cpu_count() or 1)))
+
+
+# ---------------------------------------------------------------------
+# 2. SMALL DATA CLASSES
+# ---------------------------------------------------------------------
+
+@dataclass
+class Block:
+    sheet: str
+    start: int
+    end: int
+    role: str
+
+
+@dataclass
+class Normalizer:
+    input_mean: np.ndarray
+    input_std: np.ndarray
+    output_mean: np.ndarray
+    output_std: np.ndarray
+
+    def normalize_input(self, values: np.ndarray) -> np.ndarray:
+        return (values - self.input_mean) / self.input_std
+
+    def normalize_output(self, values: np.ndarray) -> np.ndarray:
+        return (values - self.output_mean) / self.output_std
+
+    def restore_output(self, values: np.ndarray) -> np.ndarray:
+        return values * self.output_std + self.output_mean
+
+
+# ---------------------------------------------------------------------
+# 3. DATA READING AND PREPARATION
+# ---------------------------------------------------------------------
+
+def set_random_seed() -> None:
+    random.seed(RANDOM_SEED)
+    np.random.seed(RANDOM_SEED)
+    torch.manual_seed(RANDOM_SEED)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(RANDOM_SEED)
+
+
+def find_workbook() -> Path:
+    preferred = ROOT / "COMSOL_07_13_2026.xlsx"
+
+    if preferred.exists():
+        return preferred
+
+    workbooks = [
+        path
+        for path in ROOT.glob("*.xlsx")
+        if not path.name.startswith("~$")
+    ]
+
+    if len(workbooks) == 1:
+        return workbooks[0]
+
+    raise FileNotFoundError(
+        "Put COMSOL_07_13_2026.xlsx in the same folder as this Python file."
+    )
+
+
+
+def open_workbook_safely(workbook_path: Path) -> openpyxl.Workbook:
+    """
+    Open the Excel workbook safely on Windows and OneDrive.
+
+    First, the code tries to make a local temporary copy. Reading the local
+    copy prevents OneDrive synchronization from interrupting openpyxl.
+
+    If Windows has locked the original workbook, close it in Excel and close
+    the File Explorer Preview pane. The code then waits for Enter and retries.
+    """
+    temporary_folder = Path(tempfile.gettempdir()) / "LSTM_COMSOL_Data"
+    temporary_folder.mkdir(parents=True, exist_ok=True)
+
+    temporary_copy = (
+        temporary_folder
+        / f"COMSOL_copy_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+    )
+
+    maximum_attempts = 3
+
+    for attempt in range(1, maximum_attempts + 1):
+        try:
+            shutil.copyfile(workbook_path, temporary_copy)
+
+            print(
+                "Using a local temporary workbook copy to avoid "
+                "OneDrive/Excel file locking:"
+            )
+            print(temporary_copy)
+            print()
+
+            return openpyxl.load_workbook(
+                temporary_copy,
+                read_only=True,
+                data_only=True,
+            )
+
+        except PermissionError:
+            print()
+            print("=" * 76)
+            print("Windows cannot read the Excel workbook because it is locked.")
+            print()
+            print("Please do these steps:")
+            print("1. Close COMSOL_07_13_2026.xlsx in Excel.")
+            print("2. Close any Excel preview of the file.")
+            print("3. In File Explorer, turn off the Preview pane if it is open.")
+            print("4. Wait a few seconds for OneDrive to finish syncing.")
+            print()
+            print(
+                f"Attempt {attempt} of {maximum_attempts} could not access:"
+            )
+            print(workbook_path)
+            print("=" * 76)
+
+            if attempt < maximum_attempts:
+                input(
+                    "After closing the workbook, press Enter here to retry..."
+                )
+            else:
+                raise PermissionError(
+                    "The Excel workbook is still locked. "
+                    "Close Excel or copy the workbook and this Python file "
+                    "to a normal local folder outside OneDrive, then run again."
+                )
+
+        except OSError as error:
+            raise OSError(
+                f"Could not copy or open the workbook: {error}"
+            ) from error
+
+    raise RuntimeError("The workbook could not be opened.")
+
+
+def load_sheet(
+    workbook: openpyxl.Workbook,
+    sheet_name: str,
+    maximum_rows: int | None = None,
+) -> np.ndarray:
+    """
+    Read the first four numeric columns:
+        time, displacement, coil current, Lorentz force.
+    """
+    worksheet = workbook[sheet_name]
+    rows = []
+
+    for row in worksheet.iter_rows(
+        min_col=1,
+        max_col=4,
+        values_only=True,
+    ):
+        try:
+            values = [float(row[0]), float(row[1]), float(row[2]), float(row[3])]
+        except (TypeError, ValueError):
+            continue
+
+        if np.all(np.isfinite(values)):
+            rows.append(values)
+
+            if maximum_rows is not None and len(rows) >= maximum_rows:
+                break
+
+    data = np.asarray(rows, dtype=np.float32)
+
+    if len(data) <= WINDOW + PARALLEL_HORIZON:
+        raise ValueError(f"Not enough numeric rows in sheet {sheet_name}")
+
+    return data
+
+
+def dc_offset_from_sheet(sheet_name: str) -> float:
+    match = re.search(r"_(\d+)mA", sheet_name)
+
+    if match is None:
+        raise ValueError(f"Cannot read the DC offset from {sheet_name}")
+
+    return float(match.group(1)) / 1000.0
+
+
+def known_input_features(raw: np.ndarray, sheet_name: str) -> np.ndarray:
+    """
+    Known input features:
+        coil current,
+        change in current,
+        DC operating offset.
+    """
+    current = raw[:, 2]
+    change_in_current = np.r_[0.0, np.diff(current)].astype(np.float32)
+    dc_offset = np.full_like(current, dc_offset_from_sheet(sheet_name))
+
+    return np.column_stack(
+        [current, change_in_current, dc_offset]
+    ).astype(np.float32)
+
+
+def measured_outputs(raw: np.ndarray) -> np.ndarray:
+    """Outputs: displacement and Lorentz force."""
+    return raw[:, [1, 3]].astype(np.float32)
+
+
+def create_random_blocks(
+    development_data: dict[str, np.ndarray],
+    block_size: int,
+) -> list[Block]:
+    """
+    Randomly assign complete non-overlapping time blocks.
+
+    We do not randomly split individual overlapping windows because that
+    would place nearly identical samples in training and validation.
+    """
+    random_generator = np.random.default_rng(RANDOM_SEED)
+    blocks = []
+
+    for sheet_name in DEVELOPMENT_SHEETS:
+        starts = list(
+            range(0, len(development_data[sheet_name]), block_size)
+        )
+
+        number_of_validation_blocks = max(
+            1,
+            round(VALIDATION_FRACTION * len(starts)),
+        )
+
+        validation_ids = set(
+            random_generator.choice(
+                len(starts),
+                size=number_of_validation_blocks,
+                replace=False,
+            ).tolist()
+        )
+
+        for block_number, start in enumerate(starts):
+            end = min(
+                start + block_size,
+                len(development_data[sheet_name]),
+            )
+
+            if end - start <= WINDOW + PARALLEL_HORIZON:
+                continue
+
+            role = (
+                "validation"
+                if block_number in validation_ids
+                else "training"
+            )
+
+            blocks.append(Block(sheet_name, start, end, role))
+
+    return blocks
+
+
+def create_normalizer(
+    development_data: dict[str, np.ndarray],
+    blocks: list[Block],
+) -> Normalizer:
+    """Calculate statistics from training blocks only."""
+    input_rows = []
+    output_rows = []
+
+    for block in blocks:
+        if block.role != "training":
+            continue
+
+        input_rows.append(
+            known_input_features(
+                development_data[block.sheet],
+                block.sheet,
+            )[block.start:block.end]
+        )
+
+        output_rows.append(
+            measured_outputs(
+                development_data[block.sheet]
+            )[block.start:block.end]
+        )
+
+    all_inputs = np.concatenate(input_rows)
+    all_outputs = np.concatenate(output_rows)
+
+    input_std = all_inputs.std(axis=0)
+    output_std = all_outputs.std(axis=0)
+
+    input_std[input_std < 1e-12] = 1.0
+    output_std[output_std < 1e-12] = 1.0
+
+    return Normalizer(
+        input_mean=all_inputs.mean(axis=0).astype(np.float32),
+        input_std=input_std.astype(np.float32),
+        output_mean=all_outputs.mean(axis=0).astype(np.float32),
+        output_std=output_std.astype(np.float32),
+    )
+
+
+def normalize_all_records(
+    raw_data: dict[str, np.ndarray],
+    normalizer: Normalizer,
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    input_data = {}
+    output_data = {}
+
+    for sheet_name, raw in raw_data.items():
+        input_data[sheet_name] = normalizer.normalize_input(
+            known_input_features(raw, sheet_name)
+        ).astype(np.float32)
+
+        output_data[sheet_name] = normalizer.normalize_output(
+            measured_outputs(raw)
+        ).astype(np.float32)
+
+    return input_data, output_data
+
+
+# ---------------------------------------------------------------------
+# 4. PYTORCH DATASETS
+# ---------------------------------------------------------------------
+
+class OneStepDataset(Dataset):
+    """Measured output history -> next measured output."""
+
+    def __init__(
+        self,
+        input_data: dict[str, np.ndarray],
+        output_data: dict[str, np.ndarray],
+        blocks: list[Block],
+        role: str,
+        stride: int,
+    ) -> None:
+        self.input_data = input_data
+        self.output_data = output_data
+        self.indices = []
+
+        for block in blocks:
+            if block.role != role:
+                continue
+
+            for target_index in range(
+                block.start + WINDOW,
+                block.end,
+                stride,
+            ):
+                self.indices.append(
+                    (block.sheet, target_index)
+                )
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, index: int):
+        sheet_name, target_index = self.indices[index]
+        start_index = target_index - WINDOW
+
+        return (
+            torch.from_numpy(
+                self.input_data[sheet_name][start_index:target_index]
+            ),
+            torch.from_numpy(
+                self.output_data[sheet_name][start_index:target_index]
+            ),
+            torch.from_numpy(
+                self.output_data[sheet_name][target_index]
+            ),
+        )
+
+
+class RolloutDataset(Dataset):
+    """Warm-up history followed by a short recursive prediction horizon."""
+
+    def __init__(
+        self,
+        input_data: dict[str, np.ndarray],
+        output_data: dict[str, np.ndarray],
+        blocks: list[Block],
+        role: str,
+        stride: int,
+        horizon: int,
+    ) -> None:
+        self.input_data = input_data
+        self.output_data = output_data
+        self.horizon = horizon
+        self.indices = []
+
+        for block in blocks:
+            if block.role != role:
+                continue
+
+            last_start = block.end - WINDOW - horizon
+
+            for start_index in range(
+                block.start,
+                last_start,
+                stride,
+            ):
+                self.indices.append(
+                    (block.sheet, start_index)
+                )
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, index: int):
+        sheet_name, start_index = self.indices[index]
+        end_index = start_index + WINDOW + self.horizon
+
+        return (
+            torch.from_numpy(
+                self.input_data[sheet_name][start_index:end_index]
+            ),
+            torch.from_numpy(
+                self.output_data[sheet_name][start_index:end_index]
+            ),
+        )
+
+
+# ---------------------------------------------------------------------
+# 5. HYBRID HAMMERSTEIN-LSTM MODEL
+# ---------------------------------------------------------------------
+
+
+class SeriesLSTM(nn.Module):
+    """
+    Series / input-only model:
+        [current, current change, DC offset]_past
+        -> [displacement, force]_next
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.static_nonlinearity = nn.Sequential(
+            nn.Linear(3, STATIC_SIZE),
+            nn.Tanh(),
+            nn.Linear(STATIC_SIZE, STATIC_SIZE),
+            nn.Tanh(),
+        )
+
+        self.lstm = nn.LSTM(
+            input_size=STATIC_SIZE,
+            hidden_size=HIDDEN_SIZE,
+            batch_first=True,
+        )
+
+        self.output_layer = nn.Sequential(
+            nn.Linear(HIDDEN_SIZE, 32),
+            nn.ReLU(),
+            nn.Linear(32, 2),
+        )
+
+    def forward(self, input_history: torch.Tensor) -> torch.Tensor:
+        nonlinear_input = self.static_nonlinearity(input_history)
+        recurrent_output, _ = self.lstm(nonlinear_input)
+        return self.output_layer(recurrent_output[:, -1])
+
+
+class HammersteinLSTM(nn.Module):
+    """
+    Ogunmolu/Gans idea:
+        static nonlinear block -> recurrent dynamic block
+
+    Wang idea:
+        measured or predicted output history enters the dynamic model
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        # Static nonlinear transformation of the known input.
+        self.static_nonlinearity = nn.Sequential(
+            nn.Linear(3, STATIC_SIZE),
+            nn.Tanh(),
+            nn.Linear(STATIC_SIZE, STATIC_SIZE),
+            nn.Tanh(),
+        )
+
+        # Dynamic recurrent block.
+        self.lstm = nn.LSTM(
+            input_size=STATIC_SIZE + 2,
+            hidden_size=HIDDEN_SIZE,
+            batch_first=True,
+        )
+
+        # Predict the next change in displacement and force.
+        self.delta_output = nn.Sequential(
+            nn.Linear(HIDDEN_SIZE, 32),
+            nn.ReLU(),
+            nn.Linear(32, 2),
+        )
+
+    def forward(
+        self,
+        input_history: torch.Tensor,
+        output_history: torch.Tensor,
+    ) -> torch.Tensor:
+        nonlinear_input = self.static_nonlinearity(
+            input_history
+        )
+
+        recurrent_input = torch.cat(
+            [nonlinear_input, output_history],
+            dim=-1,
+        )
+
+        recurrent_output, _ = self.lstm(
+            recurrent_input
+        )
+
+        predicted_change = self.delta_output(
+            recurrent_output[:, -1]
+        )
+
+        # Residual prediction improves numerical stability.
+        return output_history[:, -1] + predicted_change
+
+
+# ---------------------------------------------------------------------
+# 6. TRAINING STAGE 1: SERIES-PARALLEL
+# ---------------------------------------------------------------------
+
+
+def evaluate_series_loss(
+    model: nn.Module,
+    data_loader: DataLoader,
+    device: torch.device,
+) -> float:
+    model.eval()
+    total_loss = 0.0
+    total_samples = 0
+
+    with torch.no_grad():
+        for input_history, _, target in data_loader:
+            input_history = input_history.to(device)
+            target = target.to(device)
+
+            prediction = model(input_history)
+            loss = nn.functional.mse_loss(prediction, target)
+
+            total_loss += float(loss) * len(target)
+            total_samples += len(target)
+
+    return total_loss / total_samples
+
+
+def train_series(
+    model: nn.Module,
+    training_loader: DataLoader,
+    validation_loader: DataLoader,
+    device: torch.device,
+    epochs: int,
+) -> list[dict]:
+    """Train the input-only series structure."""
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=LEARNING_RATE,
+        weight_decay=1e-6,
+    )
+
+    history = []
+    best_validation_loss = float("inf")
+    best_state = None
+
+    for epoch in range(1, epochs + 1):
+        model.train()
+        total_loss = 0.0
+        total_samples = 0
+
+        for input_history, _, target in training_loader:
+            input_history = input_history.to(device)
+            target = target.to(device)
+
+            prediction = model(input_history)
+            loss = nn.functional.mse_loss(prediction, target)
+
+            optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+
+            total_loss += float(loss) * len(target)
+            total_samples += len(target)
+
+        training_loss = total_loss / total_samples
+        validation_loss = evaluate_series_loss(
+            model,
+            validation_loader,
+            device,
+        )
+
+        history.append(
+            {
+                "structure": "series",
+                "stage": "series",
+                "epoch": epoch,
+                "teacher_forcing_ratio": 0.0,
+                "training_normalized_mse": training_loss,
+                "validation_normalized_mse": validation_loss,
+            }
+        )
+
+        if validation_loss < best_validation_loss:
+            best_validation_loss = validation_loss
+            best_state = {
+                name: value.detach().cpu().clone()
+                for name, value in model.state_dict().items()
+            }
+
+        print(
+            f"Series {epoch:02d}/{epochs} | "
+            f"train={training_loss:.7f} | "
+            f"validation={validation_loss:.7f}"
+        )
+
+    if best_state is None:
+        raise RuntimeError("Series training failed.")
+
+    model.load_state_dict(best_state)
+    return history
+
+
+def evaluate_one_step_loss(
+    model: nn.Module,
+    data_loader: DataLoader,
+    device: torch.device,
+) -> float:
+    model.eval()
+    total_loss = 0.0
+    total_samples = 0
+
+    with torch.no_grad():
+        for input_history, output_history, target in data_loader:
+            input_history = input_history.to(device)
+            output_history = output_history.to(device)
+            target = target.to(device)
+
+            prediction = model(
+                input_history,
+                output_history,
+            )
+
+            loss = nn.functional.mse_loss(
+                prediction,
+                target,
+            )
+
+            total_loss += float(loss) * len(target)
+            total_samples += len(target)
+
+    return total_loss / total_samples
+
+
+def train_series_parallel(
+    model: nn.Module,
+    training_loader: DataLoader,
+    validation_loader: DataLoader,
+    device: torch.device,
+    epochs: int,
+) -> list[dict]:
+    """
+    Wang series-parallel training:
+    measured displacement and force histories are always supplied.
+    """
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=LEARNING_RATE,
+        weight_decay=1e-6,
+    )
+
+    history = []
+    best_validation_loss = float("inf")
+    best_state = None
+
+    for epoch in range(1, epochs + 1):
+        model.train()
+        total_loss = 0.0
+        total_samples = 0
+
+        for input_history, output_history, target in training_loader:
+            input_history = input_history.to(device)
+            output_history = output_history.to(device)
+            target = target.to(device)
+
+            # Small noise makes feedback more robust.
+            noisy_output_history = (
+                output_history
+                + 0.01 * torch.randn_like(output_history)
+            )
+
+            prediction = model(
+                input_history,
+                noisy_output_history,
+            )
+
+            loss = nn.functional.mse_loss(
+                prediction,
+                target,
+            )
+
+            optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(
+                model.parameters(),
+                max_norm=1.0,
+            )
+            optimizer.step()
+
+            total_loss += float(loss) * len(target)
+            total_samples += len(target)
+
+        training_loss = total_loss / total_samples
+
+        validation_loss = evaluate_one_step_loss(
+            model,
+            validation_loader,
+            device,
+        )
+
+        history.append(
+            {
+                "structure": "series_parallel",
+                "stage": "series_parallel",
+                "epoch": epoch,
+                "teacher_forcing_ratio": 1.0,
+                "training_normalized_mse": training_loss,
+                "validation_normalized_mse": validation_loss,
+            }
+        )
+
+        if validation_loss < best_validation_loss:
+            best_validation_loss = validation_loss
+
+            best_state = {
+                name: value.detach().cpu().clone()
+                for name, value in model.state_dict().items()
+            }
+
+        print(
+            f"Series-parallel {epoch:02d}/{epochs} | "
+            f"train={training_loss:.7f} | "
+            f"validation={validation_loss:.7f}"
+        )
+
+    if best_state is None:
+        raise RuntimeError("Series-parallel training failed.")
+
+    model.load_state_dict(best_state)
+
+    return history
+
+
+# ---------------------------------------------------------------------
+# 7. TRAINING STAGE 2: SCHEDULED MULTI-STEP ROLLOUT
+# ---------------------------------------------------------------------
+
+def recursive_batch_prediction(
+    model: nn.Module,
+    input_sequence: torch.Tensor,
+    output_sequence: torch.Tensor,
+    horizon: int,
+    teacher_forcing_ratio: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    input_history = input_sequence[:, :WINDOW].clone()
+    output_history = output_sequence[:, :WINDOW].clone()
+
+    predictions = []
+    targets = []
+
+    for step in range(horizon):
+        prediction = model(
+            input_history,
+            output_history,
+        )
+
+        target = output_sequence[:, WINDOW + step]
+
+        predictions.append(prediction)
+        targets.append(target)
+
+        if teacher_forcing_ratio <= 0.0:
+            feedback = prediction
+        else:
+            use_measured = (
+                torch.rand(
+                    len(prediction),
+                    1,
+                    device=prediction.device,
+                )
+                < teacher_forcing_ratio
+            )
+
+            feedback = torch.where(
+                use_measured,
+                target,
+                prediction,
+            )
+
+        next_input = input_sequence[
+            :,
+            WINDOW + step:WINDOW + step + 1,
+        ]
+
+        input_history = torch.cat(
+            [input_history[:, 1:], next_input],
+            dim=1,
+        )
+
+        output_history = torch.cat(
+            [output_history[:, 1:], feedback[:, None]],
+            dim=1,
+        )
+
+    return (
+        torch.stack(predictions, dim=1),
+        torch.stack(targets, dim=1),
+    )
+
+
+def evaluate_rollout_loss(
+    model: nn.Module,
+    data_loader: DataLoader,
+    device: torch.device,
+    horizon: int,
+) -> float:
+    model.eval()
+    losses = []
+
+    with torch.no_grad():
+        for input_sequence, output_sequence in data_loader:
+            input_sequence = input_sequence.to(device)
+            output_sequence = output_sequence.to(device)
+
+            prediction, target = recursive_batch_prediction(
+                model,
+                input_sequence,
+                output_sequence,
+                horizon,
+                teacher_forcing_ratio=0.0,
+            )
+
+            losses.append(
+                float(
+                    nn.functional.mse_loss(
+                        prediction,
+                        target,
+                    )
+                )
+            )
+
+    return float(np.mean(losses))
+
+
+def train_scheduled_rollout(
+    model: nn.Module,
+    training_loader: DataLoader,
+    validation_loader: DataLoader,
+    device: torch.device,
+    epochs: int,
+    horizon: int,
+) -> list[dict]:
+    """
+    Gradually replace measured feedback with predicted feedback.
+    The loss includes all steps in the rollout horizon.
+    """
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=ROLLOUT_LEARNING_RATE,
+        weight_decay=1e-6,
+    )
+
+    history = []
+    best_validation_loss = float("inf")
+    best_state = None
+
+    for epoch in range(1, epochs + 1):
+        teacher_forcing_ratio = (
+            0.1
+            if epochs == 1
+            else 0.9 - 0.8 * (epoch - 1) / (epochs - 1)
+        )
+
+        model.train()
+        training_losses = []
+
+        for input_sequence, output_sequence in training_loader:
+            input_sequence = input_sequence.to(device)
+            output_sequence = output_sequence.to(device)
+
+            prediction, target = recursive_batch_prediction(
+                model,
+                input_sequence,
+                output_sequence,
+                horizon,
+                teacher_forcing_ratio,
+            )
+
+            loss = nn.functional.mse_loss(
+                prediction,
+                target,
+            )
+
+            optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(
+                model.parameters(),
+                max_norm=1.0,
+            )
+            optimizer.step()
+
+            training_losses.append(float(loss))
+
+        training_loss = float(
+            np.mean(training_losses)
+        )
+
+        validation_loss = evaluate_rollout_loss(
+            model,
+            validation_loader,
+            device,
+            horizon,
+        )
+
+        history.append(
+            {
+                "structure": "parallel",
+                "stage": "parallel",
+                "epoch": epoch,
+                "teacher_forcing_ratio": teacher_forcing_ratio,
+                "training_normalized_mse": training_loss,
+                "validation_normalized_mse": validation_loss,
+            }
+        )
+
+        if validation_loss < best_validation_loss:
+            best_validation_loss = validation_loss
+
+            best_state = {
+                name: value.detach().cpu().clone()
+                for name, value in model.state_dict().items()
+            }
+
+        print(
+            f"Rollout {epoch:02d}/{epochs} | "
+            f"measured feedback={teacher_forcing_ratio:.2f} | "
+            f"train={training_loss:.7f} | "
+            f"validation={validation_loss:.7f}"
+        )
+
+    if best_state is None:
+        raise RuntimeError("Rollout training failed.")
+
+    model.load_state_dict(best_state)
+
+    return history
+
+
+# ---------------------------------------------------------------------
+# 8. COMPLETE TEST PREDICTIONS
+# ---------------------------------------------------------------------
+
+
+def predict_series(
+    model: nn.Module,
+    normalized_input: np.ndarray,
+    device: torch.device,
+) -> np.ndarray:
+    """Input-only prediction over the complete test record."""
+    predicted = np.zeros((len(normalized_input), 2), dtype=np.float32)
+
+    windows = np.asarray(
+        [
+            normalized_input[index - WINDOW:index]
+            for index in range(WINDOW, len(normalized_input))
+        ],
+        dtype=np.float32,
+    )
+
+    model.eval()
+
+    with torch.no_grad():
+        for start in range(0, len(windows), 1024):
+            end = min(start + 1024, len(windows))
+            batch = torch.from_numpy(windows[start:end]).to(device)
+            predicted[WINDOW + start:WINDOW + end] = (
+                model(batch).cpu().numpy()
+            )
+
+    return predicted
+
+
+def predict_one_step(
+    model: nn.Module,
+    normalized_input: np.ndarray,
+    normalized_output: np.ndarray,
+    device: torch.device,
+) -> np.ndarray:
+    """Measured output history is supplied at every test step."""
+    predicted = np.zeros_like(normalized_output)
+    predicted[:WINDOW] = normalized_output[:WINDOW]
+
+    input_windows = np.asarray(
+        [
+            normalized_input[index - WINDOW:index]
+            for index in range(WINDOW, len(normalized_input))
+        ],
+        dtype=np.float32,
+    )
+    output_windows = np.asarray(
+        [
+            normalized_output[index - WINDOW:index]
+            for index in range(WINDOW, len(normalized_output))
+        ],
+        dtype=np.float32,
+    )
+
+    model.eval()
+
+    with torch.no_grad():
+        for start in range(0, len(input_windows), 1024):
+            end = min(start + 1024, len(input_windows))
+            input_batch = torch.from_numpy(input_windows[start:end]).to(device)
+            output_batch = torch.from_numpy(output_windows[start:end]).to(device)
+            predicted[WINDOW + start:WINDOW + end] = (
+                model(input_batch, output_batch).cpu().numpy()
+            )
+
+    return predicted
+
+
+def predict_parallel(
+    model: nn.Module,
+    normalized_input: np.ndarray,
+    normalized_output: np.ndarray,
+    device: torch.device,
+) -> np.ndarray:
+    """
+    Only the first WINDOW measured outputs initialize the simulation.
+    All later displacement and force histories are predictions.
+    """
+    predicted = np.zeros_like(normalized_output)
+    predicted[:WINDOW] = normalized_output[:WINDOW]
+
+    model.eval()
+
+    with torch.no_grad():
+        for target_index in range(WINDOW, len(normalized_input)):
+            start_index = target_index - WINDOW
+
+            input_history = torch.from_numpy(
+                normalized_input[
+                    start_index:target_index
+                ][None]
+            ).to(device)
+
+            output_history = torch.from_numpy(
+                predicted[
+                    start_index:target_index
+                ][None]
+            ).to(device)
+
+            predicted[target_index] = (
+                model(
+                    input_history,
+                    output_history,
+                )
+                .cpu()
+                .numpy()[0]
+            )
+
+    return predicted
+
+
+# ---------------------------------------------------------------------
+# 9. METRICS AND FILE HELPERS
+# ---------------------------------------------------------------------
+
+def calculate_metrics(
+    measured: np.ndarray,
+    predicted: np.ndarray,
+    evaluation_name: str,
+) -> list[dict]:
+    rows = []
+
+    for column, output_name, unit in [
+        (0, "Displacement", "mm"),
+        (1, "Lorentz force", "N"),
+    ]:
+        actual = measured[:, column]
+        estimate = predicted[:, column]
+        error = actual - estimate
+
+        mse = float(np.mean(error**2))
+        rmse = float(np.sqrt(mse))
+        mae = float(np.mean(np.abs(error)))
+
+        total_variation = float(
+            np.sum(
+                (actual - actual.mean()) ** 2
+            )
+        )
+
+        r_squared = (
+            1.0
+            - float(np.sum(error**2))
+            / total_variation
+            if total_variation > 0
+            else float("nan")
+        )
+
+        norm_denominator = float(
+            np.linalg.norm(
+                actual - actual.mean()
+            )
+        )
+
+        fit_percent = (
+            100.0
+            * (
+                1.0
+                - float(np.linalg.norm(error))
+                / norm_denominator
+            )
+            if norm_denominator > 0
+            else float("nan")
+        )
+
+        rows.append(
+            {
+                "dataset": "147mA",
+                "evaluation": evaluation_name,
+                "output": output_name,
+                "unit": unit,
+                "MSE": mse,
+                "RMSE": rmse,
+                "MAE": mae,
+                "R2": r_squared,
+                "fit_percent": fit_percent,
+            }
+        )
+
+    return rows
+
+
+def write_dictionary_rows(
+    path: Path,
+    rows: list[dict],
+) -> None:
+    columns = []
+
+    for row in rows:
+        for key in row:
+            if key not in columns:
+                columns.append(key)
+
+    with path.open(
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as file:
+        writer = csv.DictWriter(
+            file,
+            fieldnames=columns,
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def create_output_folders() -> tuple[Path, Path, Path]:
+    """
+    Create one new timestamped run.
+    This avoids Windows/OneDrive permission errors.
+    """
+    timestamp = datetime.now().strftime(
+        "%Y%m%d_%H%M%S"
+    )
+
+    report_folder = (
+        ROOT
+        / "01_Report_Figures"
+        / timestamp
+    )
+
+    presentation_folder = (
+        ROOT
+        / "02_Presentation_Figures"
+        / timestamp
+    )
+
+    complete_folder = (
+        ROOT
+        / "03_Complete_Results"
+        / timestamp
+    )
+
+    for folder in [
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    ]:
+        folder.mkdir(parents=True)
+
+    return (
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+
+
+def save_figure(
+    figure: plt.Figure,
+    filename: str,
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+    for_presentation: bool = False,
+) -> None:
+    complete_path = complete_folder / filename
+
+    figure.tight_layout()
+
+    figure.savefig(
+        complete_path,
+        dpi=220,
+        bbox_inches="tight",
+    )
+
+    plt.close(figure)
+
+    shutil.copy2(
+        complete_path,
+        report_folder / filename,
+    )
+
+    if for_presentation:
+        shutil.copy2(
+            complete_path,
+            presentation_folder / filename,
+        )
+
+
+# ---------------------------------------------------------------------
+# 10. FIGURES
+# ---------------------------------------------------------------------
+
+def make_cost_figure(
+    history: list[dict],
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    figure, axis = plt.subplots(figsize=(11, 6))
+
+    for structure in ["series", "series_parallel", "parallel"]:
+        rows = [
+            row for row in history
+            if row.get("structure") == structure
+        ]
+
+        if not rows:
+            continue
+
+        epochs = np.arange(1, len(rows) + 1)
+
+        axis.plot(
+            epochs,
+            [row["training_normalized_mse"] for row in rows],
+            label=f"{structure}: training",
+        )
+
+        axis.plot(
+            epochs,
+            [row["validation_normalized_mse"] for row in rows],
+            linestyle="--",
+            label=f"{structure}: validation",
+        )
+
+    axis.set_yscale("log")
+    axis.set_xlabel("Training epoch")
+    axis.set_ylabel("Normalized MSE")
+    axis.set_title("Cost comparison of series, series-parallel, and parallel models")
+    axis.grid(True, which="both", alpha=0.3)
+    axis.legend()
+
+    save_figure(
+        figure,
+        "01_all_structures_cost.png",
+        report_folder,
+        presentation_folder,
+        complete_folder,
+        for_presentation=True,
+    )
+
+def make_block_figure(
+    blocks: list[Block],
+    raw_data: dict[str, np.ndarray],
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    figure, axis = plt.subplots(figsize=(12, 5))
+
+    all_sheets = DEVELOPMENT_SHEETS + [TEST_SHEET]
+    positions = {
+        sheet_name: position
+        for position, sheet_name in enumerate(all_sheets)
+    }
+
+    shown_training = False
+    shown_validation = False
+
+    for block in blocks:
+        time_values = raw_data[block.sheet][:, 0]
+        start_time = float(time_values[block.start])
+        end_time = float(time_values[block.end - 1])
+
+        color = TRAIN_COLOR if block.role == "training" else VALIDATION_COLOR
+        label = None
+
+        if block.role == "training" and not shown_training:
+            label = "Training"
+            shown_training = True
+
+        if block.role == "validation" and not shown_validation:
+            label = "Validation"
+            shown_validation = True
+
+        axis.barh(
+            positions[block.sheet],
+            end_time - start_time,
+            left=start_time,
+            height=0.55,
+            color=color,
+            label=label,
+        )
+
+    test_time = raw_data[TEST_SHEET][:, 0]
+    axis.barh(
+        positions[TEST_SHEET],
+        float(test_time[-1] - test_time[0]),
+        left=float(test_time[0]),
+        height=0.55,
+        color=TEST_COLOR,
+        label="Independent test",
+    )
+
+    axis.set_yticks(list(positions.values()))
+    axis.set_yticklabels(
+        [sheet.replace("DC_Offset_", "") for sheet in all_sheets]
+    )
+    axis.set_xlabel("Time within each chirp record (s)")
+    axis.set_ylabel("Dataset")
+    axis.set_title("Exact training, validation, and independent-test regions")
+    axis.grid(True, axis="x", alpha=0.3)
+    axis.legend()
+
+    save_figure(
+        figure,
+        "02_data_usage_summary.png",
+        report_folder,
+        presentation_folder,
+        complete_folder,
+        for_presentation=True,
+    )
+
+
+def make_colored_data_figures(
+    blocks: list[Block],
+    raw_data: dict[str, np.ndarray],
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    """Color the actual current records by training/validation/test role."""
+    for sheet_name in DEVELOPMENT_SHEETS + [TEST_SHEET]:
+        raw = raw_data[sheet_name]
+        time_values = raw[:, 0]
+        current = raw[:, 2]
+
+        figure, axis = plt.subplots(figsize=(12, 4.5))
+
+        if sheet_name == TEST_SHEET:
+            axis.plot(
+                time_values,
+                current,
+                color=TEST_COLOR,
+                label="Independent test",
+            )
+        else:
+            shown_training = False
+            shown_validation = False
+
+            for block in blocks:
+                if block.sheet != sheet_name:
+                    continue
+
+                color = (
+                    TRAIN_COLOR
+                    if block.role == "training"
+                    else VALIDATION_COLOR
+                )
+
+                label = None
+                if block.role == "training" and not shown_training:
+                    label = "Training"
+                    shown_training = True
+                if block.role == "validation" and not shown_validation:
+                    label = "Validation"
+                    shown_validation = True
+
+                axis.plot(
+                    time_values[block.start:block.end],
+                    current[block.start:block.end],
+                    color=color,
+                    label=label,
+                )
+
+        label_name = sheet_name.replace("DC_Offset_", "")
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel("Coil current (A)")
+        axis.set_title(
+            f"{label_name}: colored data usage across the changing-frequency chirp"
+        )
+        axis.grid(True, alpha=0.3)
+        axis.legend()
+
+        save_figure(
+            figure,
+            f"data_usage_{label_name}_current.png",
+            report_folder,
+            presentation_folder,
+            complete_folder,
+            for_presentation=True,
+        )
+
+def make_prediction_figures(
+    time_values: np.ndarray,
+    measured: np.ndarray,
+    series: np.ndarray,
+    series_parallel: np.ndarray,
+    parallel: np.ndarray,
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    outputs = [
+        (0, "Displacement", "mm", "displacement"),
+        (1, "Lorentz force", "N", "force"),
+    ]
+
+    for column, name, unit, short_name in outputs:
+        figure, axis = plt.subplots(figsize=(12, 5))
+
+        axis.plot(time_values, measured[:, column], label="Measured", linewidth=2)
+        axis.plot(time_values, series[:, column], label="Series")
+        axis.plot(
+            time_values,
+            series_parallel[:, column],
+            label="Series-parallel",
+        )
+        axis.plot(time_values, parallel[:, column], label="Parallel")
+
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel(f"{name} ({unit})")
+        axis.set_title(f"147 mA unseen test: {name.lower()} comparison")
+        axis.grid(True, alpha=0.3)
+        axis.legend()
+
+        save_figure(
+            figure,
+            f"03_{short_name}_all_structures.png",
+            report_folder,
+            presentation_folder,
+            complete_folder,
+            for_presentation=True,
+        )
+
+        figure, axis = plt.subplots(figsize=(12, 4.5))
+
+        axis.plot(
+            time_values,
+            measured[:, column] - series[:, column],
+            label="Series error",
+        )
+        axis.plot(
+            time_values,
+            measured[:, column] - series_parallel[:, column],
+            label="Series-parallel error",
+        )
+        axis.plot(
+            time_values,
+            measured[:, column] - parallel[:, column],
+            label="Parallel error",
+        )
+
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel(f"{name} error ({unit})")
+        axis.set_title(f"147 mA unseen test: {name.lower()} error comparison")
+        axis.grid(True, alpha=0.3)
+        axis.legend()
+
+        save_figure(
+            figure,
+            f"04_{short_name}_errors_all_structures.png",
+            report_folder,
+            presentation_folder,
+            complete_folder,
+            for_presentation=True,
+        )
+
+def make_accuracy_table(
+    metric_rows: list[dict],
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    table_values = []
+
+    for row in metric_rows:
+        table_values.append(
+            [
+                row["evaluation"],
+                row["output"],
+                f"{row['RMSE']:.6g}",
+                f"{row['MAE']:.6g}",
+                f"{row['R2']:.5f}",
+                f"{row['fit_percent']:.3f}",
+            ]
+        )
+
+    figure, axis = plt.subplots(figsize=(11, 5))
+    axis.axis("off")
+
+    table = axis.table(
+        cellText=table_values,
+        colLabels=["Structure", "Output", "RMSE", "MAE", "R²", "Fit (%)"],
+        loc="center",
+        cellLoc="center",
+    )
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1.0, 1.45)
+    axis.set_title("147 mA unseen-test comparison of all three structures")
+
+    save_figure(
+        figure,
+        "05_all_structures_accuracy_table.png",
+        report_folder,
+        presentation_folder,
+        complete_folder,
+        for_presentation=True,
+    )
+
+
+# ---------------------------------------------------------------------
+# 11. MAIN PROGRAM
+# ---------------------------------------------------------------------
+
+def main() -> None:
+    set_random_seed()
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    maximum_rows = 3000 if QUICK_MODE else None
+    block_size = 750 if QUICK_MODE else BLOCK_SIZE
+    series_epochs = 2 if QUICK_MODE else SERIES_EPOCHS
+    series_parallel_epochs = 2 if QUICK_MODE else SERIES_PARALLEL_EPOCHS
+    parallel_epochs = 1 if QUICK_MODE else PARALLEL_EPOCHS
+    parallel_horizon = 4 if QUICK_MODE else PARALLEL_HORIZON
+
+    workbook_path = find_workbook()
+
+    print("=" * 76)
+    print("Series, series-parallel, and parallel system identification")
+    print("=" * 76)
+    print(f"Workbook: {workbook_path}")
+    print(f"Device: {device}")
+    print("Development: 67, 87, 107, and 127 mA")
+    print("Independent test: 147 mA")
+    print()
+
+    workbook = open_workbook_safely(workbook_path)
+
+    sheet_names = DEVELOPMENT_SHEETS + [TEST_SHEET]
+    raw_data = {
+        sheet_name: load_sheet(workbook, sheet_name, maximum_rows)
+        for sheet_name in sheet_names
+    }
+    workbook.close()
+
+    development_data = {
+        sheet_name: raw_data[sheet_name]
+        for sheet_name in DEVELOPMENT_SHEETS
+    }
+
+    blocks = create_random_blocks(development_data, block_size)
+    normalizer = create_normalizer(development_data, blocks)
+    input_data, output_data = normalize_all_records(raw_data, normalizer)
+
+    training_data = OneStepDataset(
+        input_data,
+        output_data,
+        blocks,
+        role="training",
+        stride=TRAIN_STRIDE,
+    )
+    validation_data = OneStepDataset(
+        input_data,
+        output_data,
+        blocks,
+        role="validation",
+        stride=VALIDATION_STRIDE,
+    )
+
+    training_loader = DataLoader(
+        training_data,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+    )
+    validation_loader = DataLoader(
+        validation_data,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+    )
+
+    rollout_training_data = RolloutDataset(
+        input_data,
+        output_data,
+        blocks,
+        role="training",
+        stride=ROLLOUT_STRIDE,
+        horizon=parallel_horizon,
+    )
+    rollout_validation_data = RolloutDataset(
+        input_data,
+        output_data,
+        blocks,
+        role="validation",
+        stride=ROLLOUT_STRIDE,
+        horizon=parallel_horizon,
+    )
+
+    rollout_training_loader = DataLoader(
+        rollout_training_data,
+        batch_size=ROLLOUT_BATCH_SIZE,
+        shuffle=True,
+    )
+    rollout_validation_loader = DataLoader(
+        rollout_validation_data,
+        batch_size=ROLLOUT_BATCH_SIZE,
+        shuffle=False,
+    )
+
+    print(f"One-step training windows: {len(training_data)}")
+    print(f"One-step validation windows: {len(validation_data)}")
+    print(f"Parallel rollout training sequences: {len(rollout_training_data)}")
+    print()
+
+    series_model = SeriesLSTM().to(device)
+    series_parallel_model = HammersteinLSTM().to(device)
+
+    training_start = time.perf_counter()
+
+    history = train_series(
+        series_model,
+        training_loader,
+        validation_loader,
+        device,
+        series_epochs,
+    )
+
+    history += train_series_parallel(
+        series_parallel_model,
+        training_loader,
+        validation_loader,
+        device,
+        series_parallel_epochs,
+    )
+
+    # The parallel model starts from the series-parallel solution and is
+    # then trained recursively with its own predicted output feedback.
+    parallel_model = copy.deepcopy(series_parallel_model).to(device)
+
+    history += train_scheduled_rollout(
+        parallel_model,
+        rollout_training_loader,
+        rollout_validation_loader,
+        device,
+        parallel_epochs,
+        parallel_horizon,
+    )
+
+    training_seconds = time.perf_counter() - training_start
+
+    test_input = input_data[TEST_SHEET]
+    test_output = output_data[TEST_SHEET]
+
+    series_normalized = predict_series(series_model, test_input, device)
+    series_parallel_normalized = predict_one_step(
+        series_parallel_model,
+        test_input,
+        test_output,
+        device,
+    )
+    parallel_normalized = predict_parallel(
+        parallel_model,
+        test_input,
+        test_output,
+        device,
+    )
+
+    measured = measured_outputs(raw_data[TEST_SHEET])
+    series_prediction = normalizer.restore_output(series_normalized)
+    series_parallel_prediction = normalizer.restore_output(
+        series_parallel_normalized
+    )
+    parallel_prediction = normalizer.restore_output(parallel_normalized)
+
+    metric_rows = []
+    metric_rows += calculate_metrics(
+        measured[WINDOW:],
+        series_prediction[WINDOW:],
+        "Series",
+    )
+    metric_rows += calculate_metrics(
+        measured[WINDOW:],
+        series_parallel_prediction[WINDOW:],
+        "Series-parallel",
+    )
+    metric_rows += calculate_metrics(
+        measured[WINDOW:],
+        parallel_prediction[WINDOW:],
+        "Parallel",
+    )
+
+    report_folder, presentation_folder, complete_folder = create_output_folders()
+
+    write_dictionary_rows(
+        complete_folder / "training_history.csv",
+        history,
+    )
+    write_dictionary_rows(
+        complete_folder / "all_structures_metrics.csv",
+        metric_rows,
+    )
+
+    block_rows = []
+    for block in blocks:
+        time_values = raw_data[block.sheet][:, 0]
+        block_rows.append(
+            {
+                "dataset": block.sheet,
+                "start_sample": block.start,
+                "end_sample_exclusive": block.end,
+                "start_time_s": float(time_values[block.start]),
+                "end_time_s": float(time_values[block.end - 1]),
+                "role": block.role,
+            }
+        )
+    write_dictionary_rows(
+        complete_folder / "data_split_blocks.csv",
+        block_rows,
+    )
+
+    prediction_table = np.column_stack(
+        [
+            raw_data[TEST_SHEET][:, 0],
+            measured[:, 0],
+            series_prediction[:, 0],
+            series_parallel_prediction[:, 0],
+            parallel_prediction[:, 0],
+            measured[:, 1],
+            series_prediction[:, 1],
+            series_parallel_prediction[:, 1],
+            parallel_prediction[:, 1],
+        ]
+    )
+
+    np.savetxt(
+        complete_folder / "147mA_all_structures_predictions.csv",
+        prediction_table,
+        delimiter=",",
+        comments="",
+        header=(
+            "time_s,"
+            "measured_displacement_mm,"
+            "series_displacement_mm,"
+            "series_parallel_displacement_mm,"
+            "parallel_displacement_mm,"
+            "measured_force_N,"
+            "series_force_N,"
+            "series_parallel_force_N,"
+            "parallel_force_N"
+        ),
+    )
+
+    torch.save(series_model.state_dict(), complete_folder / "series_model.pt")
+    torch.save(
+        series_parallel_model.state_dict(),
+        complete_folder / "series_parallel_model.pt",
+    )
+    torch.save(parallel_model.state_dict(), complete_folder / "parallel_model.pt")
+
+    run_information = {
+        "device": str(device),
+        "development_sheets": DEVELOPMENT_SHEETS,
+        "test_sheet": TEST_SHEET,
+        "window": WINDOW,
+        "hidden_size": HIDDEN_SIZE,
+        "static_size": STATIC_SIZE,
+        "series_epochs": series_epochs,
+        "series_parallel_epochs": series_parallel_epochs,
+        "parallel_epochs": parallel_epochs,
+        "parallel_horizon": parallel_horizon,
+        "training_seconds": training_seconds,
+        "random_block_size": block_size,
+        "validation_fraction": VALIDATION_FRACTION,
+        "quick_mode": QUICK_MODE,
+    }
+    (complete_folder / "run_information.json").write_text(
+        json.dumps(run_information, indent=2),
+        encoding="utf-8",
+    )
+
+    make_cost_figure(
+        history,
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+    make_block_figure(
+        blocks,
+        raw_data,
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+    make_colored_data_figures(
+        blocks,
+        raw_data,
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+    make_prediction_figures(
+        raw_data[TEST_SHEET][:, 0],
+        measured,
+        series_prediction,
+        series_parallel_prediction,
+        parallel_prediction,
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+    make_accuracy_table(
+        metric_rows,
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+
+    print()
+    print("=" * 76)
+    print("Finished successfully.")
+    print(f"Training time: {training_seconds:.2f} s")
+    print(f"Report figures: {report_folder}")
+    print(f"Presentation figures: {presentation_folder}")
+    print(f"Complete results: {complete_folder}")
+    print("=" * 76)
+
+    if os.name == "nt":
+        try:
+            os.startfile(str(report_folder))
+            os.startfile(str(presentation_folder))
+            os.startfile(str(complete_folder))
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    main()

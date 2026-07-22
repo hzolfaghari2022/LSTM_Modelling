@@ -1,0 +1,18 @@
+{
+  "device": "cpu",
+  "development_sheets": [
+    "DC_Offset_67mA",
+    "DC_Offset_87mA",
+    "DC_Offset_107mA",
+    "DC_Offset_127mA"
+  ],
+  "test_sheet": "DC_Offset_147mA",
+  "window": 120,
+  "hidden_size": 64,
+  "static_size": 24,
+  "one_step_epochs": 30,
+  "rollout_epochs": 12,
+  "rollout_horizon": 12,
+  "training_seconds": 38.469417899963446,
+  "quick_mode": false
+}
