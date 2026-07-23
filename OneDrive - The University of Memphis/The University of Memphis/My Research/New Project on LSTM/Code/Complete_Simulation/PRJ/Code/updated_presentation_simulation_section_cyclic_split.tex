@@ -826,7 +826,33 @@ I combine the two lessons: \textbf{Wang} guides the identification structure and
 
 \partslide{Part III}{My Actuator Simulation: Series, Series--Parallel, and Parallel Results}
 
-\begin{frame}{My simulation: data usage and unseen test}
+
+\begin{frame}{My simulation: why I changed the data split}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.38\textwidth}
+\begin{block}{Problem with chirp data}
+The excitation frequency changes continuously. A simple early/middle/late split can make training, validation, and test see different frequency ranges.
+\end{block}
+\begin{block}{Updated idea}
+Use a cyclic blocked split across each development chirp:
+\[
+\text{train}\rightarrow\text{val}\rightarrow\text{dev. test}\rightarrow\text{repeat}.
+\]
+Guard gaps are inserted between roles to reduce leakage from overlapping LSTM windows.
+\end{block}
+\end{column}
+\begin{column}{0.58\textwidth}
+\centering
+\simfig[width=\linewidth,height=0.56\textheight,keepaspectratio]{00_cyclic_split_schematic.png}{Cyclic split schematic}
+\begin{block}{Why this is useful}
+Training, validation, and internal test blocks all cover low-, medium-, and high-frequency parts of the chirp.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{My simulation: data usage on the real chirp records}
 \scriptsize
 \begin{columns}[T,onlytextwidth]
 \begin{column}{0.34\textwidth}
@@ -836,20 +862,22 @@ I combine the two lessons: \textbf{Wang} guides the identification structure and
 \[
 67,\ 87,\ 107,\ 127\ \mathrm{mA}.
 \]
-\item Random non-overlapping blocks are used for training and validation.
-\item This helps cover different chirp-frequency regions.
+\item Blue: training.
+\item Orange: validation.
+\item Purple: internal development test.
+\item Gray: guard gap.
 \end{itemize}
 \end{block}
-\begin{block}{Final test}
+\begin{block}{Final unseen test}
 \[
-147\ \mathrm{mA}\rightarrow\text{unseen test only}.
+147\ \mathrm{mA}\rightarrow\text{green, final test only}.
 \]
 No normalization, training, or validation uses this record.
 \end{block}
 \end{column}
 \begin{column}{0.62\textwidth}
 \centering
-\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{02_data_usage_summary.png}{Training, validation, and test data usage}
+\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{02_data_usage_summary.png}{Cyclic training, validation, development-test, and final-test usage}
 \end{column}
 \end{columns}
 \end{frame}

@@ -1,0 +1,16 @@
+EXPECTED FIGURES FROM THE FINAL SIMULATION
+
+01_all_structures_cost.png
+02_data_usage_summary.png
+03_displacement_all_structures.png
+03_force_all_structures.png
+04_displacement_errors_all_structures.png
+04_force_errors_all_structures.png
+05_all_structures_accuracy_table.png
+06_series_measured_vs_predicted.png
+06_series_parallel_measured_vs_predicted.png
+06_parallel_measured_vs_predicted.png
+07_series_regression.png
+07_series_parallel_regression.png
+07_parallel_regression.png
+08_all_structures_regression_comparison.png

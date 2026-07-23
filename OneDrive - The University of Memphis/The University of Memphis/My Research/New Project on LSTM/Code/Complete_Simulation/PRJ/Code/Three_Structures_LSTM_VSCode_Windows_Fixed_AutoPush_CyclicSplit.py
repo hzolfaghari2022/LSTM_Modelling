@@ -96,7 +96,17 @@ ROLLOUT_LEARNING_RATE = 1e-4
 
 TRAIN_COLOR = "#1f77b4"
 VALIDATION_COLOR = "#ff7f0e"
+DEVELOPMENT_TEST_COLOR = "#9467bd"
 TEST_COLOR = "#2ca02c"
+GAP_COLOR = "#b0b0b0"
+
+# Cyclic blocked split for the four development chirps.
+# This follows the idea: train block -> validation block -> test block -> repeat.
+# Guard gaps are unused samples between roles to reduce leakage from overlapping LSTM windows.
+CYCLIC_TRAIN_SAMPLES = 1000
+CYCLIC_VALIDATION_SAMPLES = 500
+CYCLIC_DEVELOPMENT_TEST_SAMPLES = 500
+GUARD_GAP_SAMPLES = WINDOW
 
 BLOCK_SIZE = 1000
 VALIDATION_FRACTION = 0.20
@@ -327,53 +337,62 @@ def measured_outputs(raw: np.ndarray) -> np.ndarray:
 def create_random_blocks(
     development_data: dict[str, np.ndarray],
     block_size: int,
+    maximum_horizon: int,
 ) -> list[Block]:
     """
-    Randomly assign complete non-overlapping time blocks.
+    Create a cyclic blocked train/validation/development-test split.
 
-    We do not randomly split individual overlapping windows because that
-    would place nearly identical samples in training and validation.
+    The chirp frequency changes continuously with time. A single contiguous
+    split, for example first 70% train and last 30% test, can make one split
+    see mostly low-frequency behavior and another split see mostly
+    high-frequency behavior. This cyclic split repeats short contiguous
+    blocks across the full chirp so that train, validation, and internal
+    development-test blocks all sample different frequency regions.
+
+    Guard gaps are inserted between roles. These samples are not used for
+    training or validation, which reduces leakage from overlapping LSTM
+    windows crossing a role boundary.
+
+    The complete 147 mA record is still kept as the final independent test.
     """
-    random_generator = np.random.default_rng(RANDOM_SEED)
-    blocks = []
+    blocks: list[Block] = []
+
+    cycle = [
+        ("training", CYCLIC_TRAIN_SAMPLES),
+        ("gap", GUARD_GAP_SAMPLES),
+        ("validation", CYCLIC_VALIDATION_SAMPLES),
+        ("gap", GUARD_GAP_SAMPLES),
+        ("development_test", CYCLIC_DEVELOPMENT_TEST_SAMPLES),
+        ("gap", GUARD_GAP_SAMPLES),
+    ]
+
+    minimum_useful_length = WINDOW + maximum_horizon + 1
 
     for sheet_name in DEVELOPMENT_SHEETS:
-        starts = list(
-            range(0, len(development_data[sheet_name]), block_size)
-        )
+        number_of_samples = len(development_data[sheet_name])
+        start = 0
 
-        number_of_validation_blocks = max(
-            1,
-            round(VALIDATION_FRACTION * len(starts)),
-        )
+        while start < number_of_samples:
+            for role, length in cycle:
+                end = min(start + length, number_of_samples)
 
-        validation_ids = set(
-            random_generator.choice(
-                len(starts),
-                size=number_of_validation_blocks,
-                replace=False,
-            ).tolist()
-        )
+                if end <= start:
+                    break
 
-        for block_number, start in enumerate(starts):
-            end = min(
-                start + block_size,
-                len(development_data[sheet_name]),
-            )
+                if role == "gap":
+                    blocks.append(Block(sheet_name, start, end, role))
+                elif end - start >= minimum_useful_length:
+                    blocks.append(Block(sheet_name, start, end, role))
 
-            if end - start <= WINDOW + PARALLEL_HORIZON:
-                continue
+                start = end
 
-            role = (
-                "validation"
-                if block_number in validation_ids
-                else "training"
-            )
-
-            blocks.append(Block(sheet_name, start, end, role))
+                if number_of_samples - start < minimum_useful_length:
+                    if start < number_of_samples:
+                        blocks.append(Block(sheet_name, start, number_of_samples, "gap"))
+                    start = number_of_samples
+                    break
 
     return blocks
-
 
 def create_normalizer(
     development_data: dict[str, np.ndarray],
@@ -1364,6 +1383,60 @@ def save_figure(
 # 10. FIGURES
 # ---------------------------------------------------------------------
 
+def make_cyclic_split_explanation(
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    """Create a simple schematic of the cyclic blocked split."""
+    figure, axis = plt.subplots(figsize=(12, 2.2))
+
+    schematic = [
+        ("Train", 10, TRAIN_COLOR),
+        ("Gap", 1.2, GAP_COLOR),
+        ("Validation", 5, VALIDATION_COLOR),
+        ("Gap", 1.2, GAP_COLOR),
+        ("Dev. test", 5, DEVELOPMENT_TEST_COLOR),
+        ("Gap", 1.2, GAP_COLOR),
+        ("Train", 10, TRAIN_COLOR),
+        ("Gap", 1.2, GAP_COLOR),
+        ("Validation", 5, VALIDATION_COLOR),
+        ("Gap", 1.2, GAP_COLOR),
+        ("Dev. test", 5, DEVELOPMENT_TEST_COLOR),
+    ]
+
+    left = 0.0
+    for label, width, color in schematic:
+        alpha = 0.45 if label == "Gap" else 1.0
+        axis.barh(0, width, left=left, height=0.6, color=color, alpha=alpha)
+        axis.text(
+            left + width / 2,
+            0,
+            label,
+            ha="center",
+            va="center",
+            fontsize=9,
+            color="black",
+        )
+        left += width
+
+    axis.set_xlim(0, left)
+    axis.set_ylim(-0.6, 0.6)
+    axis.set_yticks([])
+    axis.set_xlabel("Time / increasing chirp frequency")
+    axis.set_title("Cyclic blocked split repeated across each chirp record")
+    axis.grid(True, axis="x", alpha=0.25)
+
+    save_figure(
+        figure,
+        "00_cyclic_split_schematic.png",
+        report_folder,
+        presentation_folder,
+        complete_folder,
+        for_presentation=True,
+    )
+
+
 def make_cost_figure(
     history: list[dict],
     report_folder: Path,
@@ -1427,24 +1500,22 @@ def make_block_figure(
         for position, sheet_name in enumerate(all_sheets)
     }
 
-    shown_training = False
-    shown_validation = False
+    role_styles = {
+        "training": (TRAIN_COLOR, "Training"),
+        "validation": (VALIDATION_COLOR, "Validation"),
+        "development_test": (DEVELOPMENT_TEST_COLOR, "Development test"),
+        "gap": (GAP_COLOR, "Guard gap"),
+    }
+    shown_labels: set[str] = set()
 
     for block in blocks:
         time_values = raw_data[block.sheet][:, 0]
         start_time = float(time_values[block.start])
         end_time = float(time_values[block.end - 1])
 
-        color = TRAIN_COLOR if block.role == "training" else VALIDATION_COLOR
-        label = None
-
-        if block.role == "training" and not shown_training:
-            label = "Training"
-            shown_training = True
-
-        if block.role == "validation" and not shown_validation:
-            label = "Validation"
-            shown_validation = True
+        color, role_label = role_styles.get(block.role, (GAP_COLOR, block.role))
+        label = None if role_label in shown_labels else role_label
+        shown_labels.add(role_label)
 
         axis.barh(
             positions[block.sheet],
@@ -1452,6 +1523,7 @@ def make_block_figure(
             left=start_time,
             height=0.55,
             color=color,
+            alpha=0.45 if block.role == "gap" else 1.0,
             label=label,
         )
 
@@ -1471,7 +1543,7 @@ def make_block_figure(
     )
     axis.set_xlabel("Time within each chirp record (s)")
     axis.set_ylabel("Dataset")
-    axis.set_title("Exact training, validation, and independent-test regions")
+    axis.set_title("Cyclic blocked train, validation, development-test, and final-test regions")
     axis.grid(True, axis="x", alpha=0.3)
     axis.legend()
 
@@ -1508,31 +1580,29 @@ def make_colored_data_figures(
                 label="Independent test",
             )
         else:
-            shown_training = False
-            shown_validation = False
+            role_styles = {
+                "training": (TRAIN_COLOR, "Training", 1.0),
+                "validation": (VALIDATION_COLOR, "Validation", 1.0),
+                "development_test": (DEVELOPMENT_TEST_COLOR, "Development test", 1.0),
+                "gap": (GAP_COLOR, "Guard gap", 0.45),
+            }
+            shown_labels: set[str] = set()
 
             for block in blocks:
                 if block.sheet != sheet_name:
                     continue
 
-                color = (
-                    TRAIN_COLOR
-                    if block.role == "training"
-                    else VALIDATION_COLOR
+                color, role_label, alpha = role_styles.get(
+                    block.role, (GAP_COLOR, block.role, 0.45)
                 )
-
-                label = None
-                if block.role == "training" and not shown_training:
-                    label = "Training"
-                    shown_training = True
-                if block.role == "validation" and not shown_validation:
-                    label = "Validation"
-                    shown_validation = True
+                label = None if role_label in shown_labels else role_label
+                shown_labels.add(role_label)
 
                 axis.plot(
                     time_values[block.start:block.end],
                     current[block.start:block.end],
                     color=color,
+                    alpha=alpha,
                     label=label,
                 )
 
@@ -1540,7 +1610,7 @@ def make_colored_data_figures(
         axis.set_xlabel("Time (s)")
         axis.set_ylabel("Coil current (A)")
         axis.set_title(
-            f"{label_name}: colored data usage across the changing-frequency chirp"
+            f"{label_name}: cyclic split across the changing-frequency chirp"
         )
         axis.grid(True, alpha=0.3)
         axis.legend()
@@ -2352,7 +2422,8 @@ def main() -> None:
     print(f"Workbook: {workbook_path}")
     print(f"Device: {device}")
     print("Development: 67, 87, 107, and 127 mA")
-    print("Independent test: 147 mA")
+    print("Development split: cyclic train -> validation -> development-test blocks")
+    print("Independent final test: 147 mA")
     print()
 
     workbook = open_workbook_safely(workbook_path)
@@ -2369,7 +2440,7 @@ def main() -> None:
         for sheet_name in DEVELOPMENT_SHEETS
     }
 
-    blocks = create_random_blocks(development_data, block_size)
+    blocks = create_random_blocks(development_data, block_size, parallel_horizon)
     normalizer = create_normalizer(development_data, blocks)
     input_data, output_data = normalize_all_records(raw_data, normalizer)
 
@@ -2589,13 +2660,23 @@ def main() -> None:
         "parallel_epochs": parallel_epochs,
         "parallel_horizon": parallel_horizon,
         "training_seconds": training_seconds,
-        "random_block_size": block_size,
-        "validation_fraction": VALIDATION_FRACTION,
+        "split_strategy": "cyclic_blocked_train_validation_development_test",
+        "cyclic_train_samples": CYCLIC_TRAIN_SAMPLES,
+        "cyclic_validation_samples": CYCLIC_VALIDATION_SAMPLES,
+        "cyclic_development_test_samples": CYCLIC_DEVELOPMENT_TEST_SAMPLES,
+        "guard_gap_samples": GUARD_GAP_SAMPLES,
+        "random_block_size_argument_not_used_in_cyclic_mode": block_size,
         "quick_mode": QUICK_MODE,
     }
     (complete_folder / "run_information.json").write_text(
         json.dumps(run_information, indent=2),
         encoding="utf-8",
+    )
+
+    make_cyclic_split_explanation(
+        report_folder,
+        presentation_folder,
+        complete_folder,
     )
 
     make_cost_figure(
