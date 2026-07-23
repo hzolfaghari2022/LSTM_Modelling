@@ -14,7 +14,7 @@
   "series_parallel_epochs": 15,
   "parallel_epochs": 8,
   "parallel_horizon": 50,
-  "training_seconds": 25.03713189996779,
+  "training_seconds": 24.582592999970075,
   "split_strategy": "cyclic_blocked_train_validation_development_test",
   "cyclic_train_samples": 1000,
   "cyclic_validation_samples": 500,
