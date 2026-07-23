@@ -14,7 +14,7 @@
   "series_parallel_epochs": 15,
   "parallel_epochs": 8,
   "parallel_horizon": 50,
-  "training_seconds": 38.514363199996296,
+  "training_seconds": 37.778261100000236,
   "random_block_size": 1000,
   "validation_fraction": 0.2,
   "quick_mode": false
