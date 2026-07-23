@@ -1629,6 +1629,416 @@ def make_prediction_figures(
             for_presentation=True,
         )
 
+
+def _regression_statistics(
+    measured_values: np.ndarray,
+    predicted_values: np.ndarray,
+) -> tuple[float, float, float]:
+    """Return slope, intercept, and regression R-squared."""
+    mask = (
+        np.isfinite(measured_values)
+        & np.isfinite(predicted_values)
+    )
+
+    x = measured_values[mask]
+    y = predicted_values[mask]
+
+    if len(x) < 2 or float(np.std(x)) < 1e-14:
+        return float("nan"), float("nan"), float("nan")
+
+    slope, intercept = np.polyfit(x, y, 1)
+    fitted = slope * x + intercept
+
+    denominator = float(
+        np.sum((y - np.mean(y)) ** 2)
+    )
+
+    r_squared = (
+        1.0
+        - float(np.sum((y - fitted) ** 2))
+        / denominator
+        if denominator > 0
+        else float("nan")
+    )
+
+    return float(slope), float(intercept), float(r_squared)
+
+
+def make_individual_measured_prediction_figures(
+    time_values: np.ndarray,
+    measured: np.ndarray,
+    predictions: dict[str, np.ndarray],
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    """
+    Create one clear measured-versus-predicted figure for each structure.
+
+    Each figure contains:
+        1. complete displacement tracking;
+        2. complete force tracking;
+        3. high-frequency displacement zoom;
+        4. high-frequency force zoom.
+    """
+    evaluation_start = WINDOW
+    t = time_values[evaluation_start:]
+    actual = measured[evaluation_start:]
+
+    # The final 25 percent of the chirp contains the highest frequencies.
+    zoom_start = max(
+        evaluation_start,
+        int(0.75 * len(time_values)),
+    )
+
+    t_zoom = time_values[zoom_start:]
+    actual_zoom = measured[zoom_start:]
+
+    for structure_name, prediction in predictions.items():
+        estimate = prediction[evaluation_start:]
+        estimate_zoom = prediction[zoom_start:]
+
+        figure, axes = plt.subplots(
+            2,
+            2,
+            figsize=(15, 8),
+        )
+
+        axes[0, 0].plot(
+            t,
+            actual[:, 0],
+            label="Measured displacement",
+            linewidth=1.8,
+        )
+        axes[0, 0].plot(
+            t,
+            estimate[:, 0],
+            "--",
+            label=f"{structure_name} prediction",
+            linewidth=1.3,
+        )
+        axes[0, 0].set_title("Complete displacement record")
+        axes[0, 0].set_xlabel("Time (s)")
+        axes[0, 0].set_ylabel("Displacement (mm)")
+        axes[0, 0].grid(True, alpha=0.3)
+        axes[0, 0].legend()
+
+        axes[1, 0].plot(
+            t,
+            actual[:, 1],
+            label="Measured Lorentz force",
+            linewidth=1.8,
+        )
+        axes[1, 0].plot(
+            t,
+            estimate[:, 1],
+            "--",
+            label=f"{structure_name} prediction",
+            linewidth=1.3,
+        )
+        axes[1, 0].set_title("Complete force record")
+        axes[1, 0].set_xlabel("Time (s)")
+        axes[1, 0].set_ylabel("Lorentz force (N)")
+        axes[1, 0].grid(True, alpha=0.3)
+        axes[1, 0].legend()
+
+        axes[0, 1].plot(
+            t_zoom,
+            actual_zoom[:, 0],
+            label="Measured displacement",
+            linewidth=1.8,
+        )
+        axes[0, 1].plot(
+            t_zoom,
+            estimate_zoom[:, 0],
+            "--",
+            label=f"{structure_name} prediction",
+            linewidth=1.3,
+        )
+        axes[0, 1].set_title(
+            "High-frequency displacement zoom"
+        )
+        axes[0, 1].set_xlabel("Time (s)")
+        axes[0, 1].set_ylabel("Displacement (mm)")
+        axes[0, 1].grid(True, alpha=0.3)
+        axes[0, 1].legend()
+
+        axes[1, 1].plot(
+            t_zoom,
+            actual_zoom[:, 1],
+            label="Measured Lorentz force",
+            linewidth=1.8,
+        )
+        axes[1, 1].plot(
+            t_zoom,
+            estimate_zoom[:, 1],
+            "--",
+            label=f"{structure_name} prediction",
+            linewidth=1.3,
+        )
+        axes[1, 1].set_title(
+            "High-frequency force zoom"
+        )
+        axes[1, 1].set_xlabel("Time (s)")
+        axes[1, 1].set_ylabel("Lorentz force (N)")
+        axes[1, 1].grid(True, alpha=0.3)
+        axes[1, 1].legend()
+
+        figure.suptitle(
+            "147 mA unseen test: "
+            f"measured data versus {structure_name} prediction",
+            fontsize=14,
+        )
+
+        safe_name = (
+            structure_name.lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
+
+        save_figure(
+            figure,
+            f"06_{safe_name}_measured_vs_predicted.png",
+            report_folder,
+            presentation_folder,
+            complete_folder,
+            for_presentation=True,
+        )
+
+
+def make_regression_figures(
+    measured: np.ndarray,
+    predictions: dict[str, np.ndarray],
+    report_folder: Path,
+    presentation_folder: Path,
+    complete_folder: Path,
+) -> None:
+    """
+    Create regression/parity plots.
+
+    Horizontal axis: measured data.
+    Vertical axis: neural-network prediction.
+    """
+    output_definitions = [
+        (0, "Displacement", "mm"),
+        (1, "Lorentz force", "N"),
+    ]
+
+    evaluation_start = WINDOW
+    actual = measured[evaluation_start:]
+
+    # Limit scatter density while preserving the whole test record.
+    number_of_points = len(actual)
+    scatter_stride = max(1, number_of_points // 5000)
+
+    for structure_name, prediction in predictions.items():
+        estimate = prediction[evaluation_start:]
+
+        figure, axes = plt.subplots(
+            1,
+            2,
+            figsize=(12, 5.5),
+        )
+
+        for axis, (column, output_name, unit) in zip(
+            axes,
+            output_definitions,
+        ):
+            x = actual[::scatter_stride, column]
+            y = estimate[::scatter_stride, column]
+
+            slope, intercept, regression_r2 = (
+                _regression_statistics(
+                    actual[:, column],
+                    estimate[:, column],
+                )
+            )
+
+            lower = float(
+                min(
+                    np.min(actual[:, column]),
+                    np.min(estimate[:, column]),
+                )
+            )
+            upper = float(
+                max(
+                    np.max(actual[:, column]),
+                    np.max(estimate[:, column]),
+                )
+            )
+
+            line_values = np.linspace(
+                lower,
+                upper,
+                200,
+            )
+
+            axis.scatter(
+                x,
+                y,
+                s=10,
+                alpha=0.35,
+                label="Test samples",
+            )
+
+            axis.plot(
+                line_values,
+                line_values,
+                "--",
+                linewidth=1.5,
+                label="Perfect prediction: y = x",
+            )
+
+            if np.isfinite(slope):
+                axis.plot(
+                    line_values,
+                    slope * line_values + intercept,
+                    ":",
+                    linewidth=1.8,
+                    label="Linear regression",
+                )
+
+            axis.set_xlabel(
+                f"Measured {output_name} ({unit})"
+            )
+            axis.set_ylabel(
+                f"Predicted {output_name} ({unit})"
+            )
+            axis.set_title(
+                f"{output_name}\n"
+                f"Predicted = {slope:.4f} × Measured "
+                f"{intercept:+.4g}\n"
+                f"Regression R² = {regression_r2:.5f}"
+            )
+            axis.grid(True, alpha=0.3)
+            axis.legend(fontsize=8)
+            axis.set_aspect(
+                "equal",
+                adjustable="box",
+            )
+
+        figure.suptitle(
+            "147 mA unseen test: "
+            f"{structure_name} regression analysis",
+            fontsize=14,
+        )
+
+        safe_name = (
+            structure_name.lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
+
+        save_figure(
+            figure,
+            f"07_{safe_name}_regression.png",
+            report_folder,
+            presentation_folder,
+            complete_folder,
+            for_presentation=True,
+        )
+
+    # One compact regression comparison for all structures.
+    figure, axes = plt.subplots(
+        2,
+        3,
+        figsize=(15, 9),
+    )
+
+    structure_items = list(predictions.items())
+
+    for column, (output_column, output_name, unit) in enumerate(
+        output_definitions
+    ):
+        for row, (structure_name, prediction) in enumerate(
+            structure_items
+        ):
+            axis = axes[column, row]
+            estimate = prediction[evaluation_start:]
+
+            x = actual[::scatter_stride, output_column]
+            y = estimate[::scatter_stride, output_column]
+
+            slope, intercept, regression_r2 = (
+                _regression_statistics(
+                    actual[:, output_column],
+                    estimate[:, output_column],
+                )
+            )
+
+            lower = float(
+                min(
+                    np.min(actual[:, output_column]),
+                    np.min(estimate[:, output_column]),
+                )
+            )
+            upper = float(
+                max(
+                    np.max(actual[:, output_column]),
+                    np.max(estimate[:, output_column]),
+                )
+            )
+
+            line_values = np.linspace(
+                lower,
+                upper,
+                200,
+            )
+
+            axis.scatter(
+                x,
+                y,
+                s=7,
+                alpha=0.30,
+            )
+            axis.plot(
+                line_values,
+                line_values,
+                "--",
+                linewidth=1.2,
+                label="y = x",
+            )
+
+            if np.isfinite(slope):
+                axis.plot(
+                    line_values,
+                    slope * line_values + intercept,
+                    ":",
+                    linewidth=1.4,
+                    label="Regression",
+                )
+
+            axis.set_xlabel(
+                f"Measured ({unit})"
+            )
+            axis.set_ylabel(
+                f"Predicted ({unit})"
+            )
+            axis.set_title(
+                f"{structure_name}: {output_name}\n"
+                f"R² = {regression_r2:.5f}"
+            )
+            axis.grid(True, alpha=0.3)
+            axis.set_aspect(
+                "equal",
+                adjustable="box",
+            )
+
+    figure.suptitle(
+        "147 mA unseen test: regression comparison of all structures",
+        fontsize=14,
+    )
+
+    save_figure(
+        figure,
+        "08_all_structures_regression_comparison.png",
+        report_folder,
+        presentation_folder,
+        complete_folder,
+        for_presentation=True,
+    )
+
+
 def make_accuracy_table(
     metric_rows: list[dict],
     report_folder: Path,
@@ -1677,6 +2087,226 @@ def make_accuracy_table(
 # ---------------------------------------------------------------------
 # 11. MAIN PROGRAM
 # ---------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------
+# GITHUB AUTOMATIC PUSH
+# ---------------------------------------------------------------------
+
+REPO_SSH = "git@github.com:hzolfaghari2022/LSTM_Modelling.git"
+
+
+def run_git(command: str, working_folder: Path, check: bool = True) -> tuple[int, str]:
+    """Run one Git command and print its output."""
+    print(f"  $ {command}")
+
+    result = subprocess.run(
+        command,
+        cwd=working_folder,
+        shell=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    output = (result.stdout + result.stderr).strip()
+
+    if output:
+        print(output)
+
+    if check and result.returncode != 0:
+        raise RuntimeError(
+            f"Git command failed:\n{command}\n\n{output}"
+        )
+
+    return result.returncode, output
+
+
+def git_push_to_github(repository_folder: Path) -> None:
+    """Commit and push the code and generated results after a successful run."""
+    print()
+    print("=" * 76)
+    print("Automatic GitHub push")
+    print("Repository: hzolfaghari2022/LSTM_Modelling")
+    print("=" * 76)
+
+    repository_folder = Path(repository_folder).resolve()
+    print(f"Git working folder: {repository_folder}")
+
+    run_git(
+        "git --version",
+        repository_folder,
+    )
+
+    # Initialize Git only when this project folder is not already a repository.
+    return_code, _ = run_git(
+        "git rev-parse --is-inside-work-tree",
+        repository_folder,
+        check=False,
+    )
+
+    if return_code != 0:
+        print("This folder is not a Git repository. Initializing Git now...")
+
+        run_git(
+            "git init",
+            repository_folder,
+        )
+
+        run_git(
+            "git branch -M main",
+            repository_folder,
+            check=False,
+        )
+
+    # Use the same Git identity and SSH repository as the supplied code.
+    run_git(
+        'git config user.name "Hussein Zolfaghari"',
+        repository_folder,
+    )
+
+    run_git(
+        'git config user.email "h.zolfaghari2015@gmail.com"',
+        repository_folder,
+    )
+
+    remote_code, current_remote = run_git(
+        "git remote get-url origin",
+        repository_folder,
+        check=False,
+    )
+
+    if remote_code != 0:
+        run_git(
+            f"git remote add origin {REPO_SSH}",
+            repository_folder,
+        )
+
+    elif current_remote.strip() != REPO_SSH:
+        run_git(
+            f"git remote set-url origin {REPO_SSH}",
+            repository_folder,
+        )
+
+    else:
+        print(f"Remote origin is already correct: {REPO_SSH}")
+
+    run_git(
+        "git branch -M main",
+        repository_folder,
+        check=False,
+    )
+
+    # Finish an earlier merge only when all conflicts have already been fixed.
+    merge_head = repository_folder / ".git" / "MERGE_HEAD"
+
+    if merge_head.exists():
+        _, unresolved = run_git(
+            "git diff --name-only --diff-filter=U",
+            repository_folder,
+            check=False,
+        )
+
+        if unresolved.strip():
+            raise RuntimeError(
+                "Git has an unfinished merge with unresolved conflicts. "
+                "Resolve the conflicts and run the simulation again."
+            )
+
+        run_git(
+            "git add .",
+            repository_folder,
+        )
+
+        merge_code, merge_output = run_git(
+            'git commit -m "Complete previous merge before automatic push"',
+            repository_folder,
+            check=False,
+        )
+
+        if (
+            merge_code != 0
+            and "nothing to commit" not in merge_output.lower()
+        ):
+            raise RuntimeError(
+                "Could not complete the previous Git merge:\n"
+                f"{merge_output}"
+            )
+
+    # Add this Python code and all result files produced by the run.
+    run_git(
+        "git add .",
+        repository_folder,
+    )
+
+    run_git(
+        "git status",
+        repository_folder,
+        check=False,
+    )
+
+    # Commit only when there are staged changes.
+    diff_code, _ = run_git(
+        "git diff --cached --quiet",
+        repository_folder,
+        check=False,
+    )
+
+    if diff_code != 0:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        commit_message = (
+            "Update three-structure LSTM code and results - "
+            f"{timestamp}"
+        )
+
+        commit_code, commit_output = run_git(
+            f'git commit -m "{commit_message}"',
+            repository_folder,
+            check=False,
+        )
+
+        if commit_code != 0:
+            raise RuntimeError(
+                "Git commit failed:\n"
+                f"{commit_output}"
+            )
+
+        print(f"Commit completed successfully:\n{commit_message}")
+
+    else:
+        print("No new local changes to commit.")
+
+    # Bring GitHub changes into the local main branch before pushing.
+    pull_code, pull_output = run_git(
+        "git pull origin main --allow-unrelated-histories --no-rebase --no-edit",
+        repository_folder,
+        check=False,
+    )
+
+    if pull_code != 0:
+        raise RuntimeError(
+            "Git pull failed. GitHub main has changes that need "
+            "manual attention.\n\n"
+            f"{pull_output}"
+        )
+
+    push_code, push_output = run_git(
+        "git push -u origin main",
+        repository_folder,
+        check=False,
+    )
+
+    if push_code != 0:
+        raise RuntimeError(
+            "Git push failed. Check the SSH connection with:\n"
+            "ssh -T git@github.com\n\n"
+            f"{push_output}"
+        )
+
+    print("Files pushed successfully to GitHub main branch.")
+    print("=" * 76)
+
 
 def main() -> None:
     set_random_seed()
@@ -1974,6 +2604,31 @@ def main() -> None:
         presentation_folder,
         complete_folder,
     )
+    # Clear measured-versus-predicted overlays for each implemented model.
+    prediction_dictionary = {
+        "Series": series_prediction,
+        "Series-parallel": series_parallel_prediction,
+        "Parallel": parallel_prediction,
+    }
+
+    make_individual_measured_prediction_figures(
+        raw_data[TEST_SHEET][:, 0],
+        measured,
+        prediction_dictionary,
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+
+    # Regression/parity figures were missing from the previous version.
+    make_regression_figures(
+        measured,
+        prediction_dictionary,
+        report_folder,
+        presentation_folder,
+        complete_folder,
+    )
+
     make_accuracy_table(
         metric_rows,
         report_folder,
@@ -1989,6 +2644,9 @@ def main() -> None:
     print(f"Presentation figures: {presentation_folder}")
     print(f"Complete results: {complete_folder}")
     print("=" * 76)
+
+    # Automatically commit and push this code and the generated results.
+    git_push_to_github(ROOT)
 
     if os.name == "nt":
         try:
