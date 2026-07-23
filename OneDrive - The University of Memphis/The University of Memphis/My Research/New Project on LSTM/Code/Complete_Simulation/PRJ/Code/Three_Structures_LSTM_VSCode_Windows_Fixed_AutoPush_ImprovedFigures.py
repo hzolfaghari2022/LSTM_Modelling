@@ -1569,23 +1569,47 @@ def make_prediction_figures(
         (1, "Lorentz force", "N", "force"),
     ]
 
+    comparison_data = {
+        "Measured": measured,
+        "Series": series,
+        "Series-parallel": series_parallel,
+        "Parallel": parallel,
+    }
+
+    zoom_start = max(WINDOW, int(0.65 * len(time_values)))
+    t_full = time_values[WINDOW:]
+    t_zoom = time_values[zoom_start:]
+
     for column, name, unit, short_name in outputs:
-        figure, axis = plt.subplots(figsize=(12, 5))
+        figure, axes = plt.subplots(1, 2, figsize=(14, 5.2))
 
-        axis.plot(time_values, measured[:, column], label="Measured", linewidth=2)
-        axis.plot(time_values, series[:, column], label="Series")
-        axis.plot(
-            time_values,
-            series_parallel[:, column],
-            label="Series-parallel",
+        for label, values in comparison_data.items():
+            axes[0].plot(
+                t_full,
+                values[WINDOW:, column],
+                label=label,
+                linewidth=2 if label == "Measured" else 1.5,
+            )
+            axes[1].plot(
+                t_zoom,
+                values[zoom_start:, column],
+                label=label,
+                linewidth=2 if label == "Measured" else 1.5,
+            )
+
+        axes[0].set_title("Full unseen-test record")
+        axes[1].set_title("Zoom on the high-frequency region")
+
+        for axis in axes:
+            axis.set_xlabel("Time (s)")
+            axis.set_ylabel(f"{name} ({unit})")
+            axis.grid(True, alpha=0.3)
+            axis.legend(fontsize=8)
+
+        figure.suptitle(
+            f"147 mA unseen test: {name.lower()} comparison across all structures",
+            fontsize=13,
         )
-        axis.plot(time_values, parallel[:, column], label="Parallel")
-
-        axis.set_xlabel("Time (s)")
-        axis.set_ylabel(f"{name} ({unit})")
-        axis.set_title(f"147 mA unseen test: {name.lower()} comparison")
-        axis.grid(True, alpha=0.3)
-        axis.legend()
 
         save_figure(
             figure,
@@ -1599,18 +1623,18 @@ def make_prediction_figures(
         figure, axis = plt.subplots(figsize=(12, 4.5))
 
         axis.plot(
-            time_values,
-            measured[:, column] - series[:, column],
+            t_full,
+            measured[WINDOW:, column] - series[WINDOW:, column],
             label="Series error",
         )
         axis.plot(
-            time_values,
-            measured[:, column] - series_parallel[:, column],
+            t_full,
+            measured[WINDOW:, column] - series_parallel[WINDOW:, column],
             label="Series-parallel error",
         )
         axis.plot(
-            time_values,
-            measured[:, column] - parallel[:, column],
+            t_full,
+            measured[WINDOW:, column] - parallel[WINDOW:, column],
             label="Parallel error",
         )
 

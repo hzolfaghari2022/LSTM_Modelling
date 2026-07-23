@@ -1,0 +1,1154 @@
+% Source-only Beamer presentation. Simulation result figures are placeholders.
+% After running the Python code, copy the files from
+% 01_Report_Figures/<timestamp> into figures/simulation/.
+\documentclass[aspectratio=169,10pt]{beamer}
+\usetheme{Madrid}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+\usepackage{amsmath,amssymb,graphicx,booktabs,xcolor,ragged2e}
+\usepackage[most]{tcolorbox}
+\usepackage{adjustbox}
+
+\definecolor{DeepBlue}{RGB}{18,45,74}
+\definecolor{SoftBlue}{RGB}{44,112,173}
+\definecolor{Accent}{RGB}{0,135,160}
+\definecolor{LightGray}{RGB}{245,247,250}
+\definecolor{SoftRed}{RGB}{180,35,35}
+\definecolor{DarkGreen}{RGB}{35,105,75}
+
+\setbeamercolor{title}{fg=white,bg=DeepBlue}
+\setbeamercolor{frametitle}{fg=white,bg=DeepBlue}
+\setbeamercolor{structure}{fg=SoftBlue}
+\setbeamercolor{block title}{fg=white,bg=SoftBlue}
+\setbeamercolor{block body}{fg=black,bg=LightGray}
+\setbeamerfont{title}{size=\Large,series=\bfseries}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{block body}{size=\footnotesize}
+\setbeamertemplate{itemize items}[circle]
+
+\newcommand{\kw}[1]{\textcolor{Accent}{\textbf{#1}}}
+\newcommand{\gap}[1]{\textcolor{SoftRed}{\textbf{#1}}}
+\newcommand{\paperfig}[2][]{\includegraphics[#1]{figures/paper/#2}}
+\newcommand{\simfig}[3][]{%
+\IfFileExists{figures/simulation/#2}{\includegraphics[#1]{figures/simulation/#2}}{%
+\begin{tcolorbox}[colback=white,colframe=SoftBlue,title={#3},arc=1mm,boxrule=0.8pt,width=\linewidth]
+\centering
+\vspace{0.28cm}
+\textbf{Insert simulation figure after running the Python code.}\\[0.2cm]
+Expected filename:\\[-0.05cm]
+\texttt{\detokenize{#2}}\\[0.15cm]
+\scriptsize Copy it from \texttt{Simulation\_Output/<timestamp>/For\_Slides} into \texttt{figures/simulation/}.
+\vspace{0.28cm}
+\end{tcolorbox}}}
+
+
+% Direct paper evidence boxes: used instead of unclear screenshot highlighting.
+\newtcolorbox{quoteevidence}[2][]{
+  colback=white,
+  colframe=#2,
+  boxrule=0.9pt,
+  arc=1.2mm,
+  left=1.5mm,right=1.5mm,top=1mm,bottom=1mm,
+  fonttitle=\bfseries\scriptsize,
+  title={#1}
+}
+\newcommand{\paperquote}[2]{%
+\begin{quoteevidence}[Direct phrase from the paper]{#1}
+\small ``#2''
+\end{quoteevidence}}
+
+\newcommand{\partslide}[2]{%
+{\setbeamercolor{background canvas}{bg=DeepBlue}%
+\begin{frame}[plain]
+\vfill
+\centering
+{\color{white}\Huge\textbf{#1}}\\[0.45cm]
+{\color{white}\Large #2}
+\vfill
+\end{frame}}}
+
+\title[LSTM System Identification]{LSTM-Based Dynamic System Identification}
+\subtitle{Wang (2017), Ogunmolu/Gans (2016), and Actuator Current-to-Displacement/Force Modeling}
+\author{Hussein Zolfaghari}
+\date{}
+
+\begin{document}
+
+\begin{frame}[plain,noframenumbering]
+\titlepage
+\end{frame}
+
+
+\begin{frame}[t]{Presentation roadmap}
+\vspace{0.03cm}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=DeepBlue,
+colbacktitle=DeepBlue,
+coltitle=white,
+title=\textbf{Part I: Wang (2017)},
+fonttitle=\scriptsize\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=1.8mm,right=1.8mm,top=1.4mm,bottom=1.4mm,
+height=0.58\textheight
+]
+\centering
+{\large\textbf{Convex-based LSTM}}
+\vspace{0.08cm}
+\RaggedRight
+\begin{itemize}\itemsep2pt
+\item Problem and research gap
+\item Series--parallel identification
+\item Multiple LSTMs with convex weights
+\item Simulated nonlinear-system results
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=SoftBlue,
+colbacktitle=SoftBlue,
+coltitle=white,
+title=\textbf{Part II: Ogunmolu/Gans},
+fonttitle=\scriptsize\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=1.8mm,right=1.8mm,top=1.4mm,bottom=1.4mm,
+height=0.58\textheight
+]
+\centering
+{\large\textbf{Deep Dynamic NNs}}
+\vspace{0.08cm}
+\RaggedRight
+\begin{itemize}\itemsep2pt
+\item Nonlinear system identification
+\item Hammerstein-type modeling
+\item RNN, LSTM, FastLSTM, GRU
+\item Soft-robot and GlassFurnace data
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=Accent,
+colbacktitle=Accent,
+coltitle=white,
+title=\textbf{Part III: My simulation},
+fonttitle=\scriptsize\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=1.8mm,right=1.8mm,top=1.4mm,bottom=1.4mm,
+height=0.58\textheight
+]
+\centering
+{\large\textbf{Actuator Modeling}}
+\vspace{0.08cm}
+\RaggedRight
+\begin{itemize}\itemsep2pt
+\item Input: coil current
+\item Outputs: displacement and force
+\item LSTM next-step prediction
+\item Full and zoomed tracking results
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\end{columns}
+\end{frame}
+
+
+\partslide{Part I}{Wang (2017): LSTM Neural Networks for Dynamic System Identification}
+
+\begin{frame}{Wang: paper objective, gap, and contribution}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.36\textwidth}
+\begin{block}{Main point}
+The paper studies nonlinear dynamic system identification using LSTM neural networks.
+\end{block}
+\begin{block}{Research gap}
+The paper argues that LSTM had been successful in machine learning, but its use for control-oriented dynamic system identification had not been sufficiently addressed.
+\end{block}
+\begin{block}{Novelty}
+Instead of using only one LSTM, Wang combines several LSTM models with adaptive convex weights to make the identification error converge faster.
+\end{block}
+\end{column}
+\begin{column}{0.60\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.80\textheight,keepaspectratio]{paper_title_abstract.png}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Wang: analytical model question}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.38\textwidth}
+\begin{block}{Question}
+Did the paper produce a final classical linear model of the form
+\[
+\dot{x}=Ax+Bu?
+\]
+\end{block}
+\begin{block}{Answer}
+\gap{No.} The paper starts from a general nonlinear dynamic representation and then formulates nonlinear discrete-time identification using input-output histories.
+\end{block}
+\end{column}
+\begin{column}{0.58\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.80\textheight,keepaspectratio]{general_dynamic_system_overview_infographic.png}
+\end{column}
+\end{columns}
+\end{frame}
+
+
+
+\begin{frame}{Wang methodology: series-parallel identification}
+\begingroup
+\scriptsize
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.34\textwidth}
+
+\begin{block}{Clear meaning}
+
+\textbf{Parallel identification} = uses past inputs and past predicted outputs:
+\[
+[u_{\mathrm{past}},\hat{y}_{\mathrm{past}}]\rightarrow \hat{y}(k)
+\]
+
+\textbf{Series path} = uses past outputs:
+\[
+y(k-1),\ldots,y(k-n)
+\]
+
+\textbf{Series--parallel} = uses both histories to predict the next output:
+\[
+\hat{y}(k)=f(u\text{-history},y\text{-history})
+\]
+\end{block}
+
+\vspace{-0.12cm}
+
+\begin{block}{Link to my simulation}
+My LSTM follows the same idea. It uses the last 120 samples of current, displacement, and force to predict the next displacement and force:
+\[
+\text{past }[I,x,F]\rightarrow \text{next }[x,F].
+\]
+\end{block}
+
+\end{column}
+
+\begin{column}{0.62\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{series_parallel_identification_model_diagram.png}
+\end{column}
+
+\end{columns}
+\endgroup
+\end{frame}
+
+\begin{frame}{Wang methodology: convex-based LSTM cluster}
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.35\textwidth}
+
+\begin{block}{Clear meaning}
+\footnotesize
+Wang does not rely on only one LSTM model.
+
+Instead, several LSTM models work in parallel:
+\[
+\text{LSTM}_1,\ \text{LSTM}_2,\ \ldots,\ \text{LSTM}_n
+\]
+
+Each one gives its own prediction:
+\[
+\hat{y}_1,\hat{y}_2,\ldots,\hat{y}_n.
+\]
+\end{block}
+
+\begin{block}{Final prediction}
+\footnotesize
+The predictions are combined using convex weights:
+\[
+\hat{y}
+=
+\sum_{i=1}^{n}\alpha_i\hat{y}_i,
+\qquad
+\alpha_i\ge0,\quad
+\sum_{i=1}^{n}\alpha_i=1.
+\]
+
+This means the final output is a weighted average of all LSTM predictions.
+\end{block}
+
+\end{column}
+
+\begin{column}{0.61\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{convex_based_lstm_ensemble_diagram.png}
+\end{column}
+
+\end{columns}
+\end{frame}
+
+\begin{frame}{Wang: data usage and training style}
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.35\textwidth}
+
+\begin{block}{Simulation data source}
+\footnotesize
+The paper uses a \textbf{simulated nonlinear SISO system}:
+\[
+u(k) \rightarrow y(k).
+\]
+The output is generated from the nonlinear difference equation shown on the right, not from experimental actuator measurements.
+\end{block}
+
+\begin{block}{Identification setup}
+\footnotesize
+\begin{itemize}\itemsep2pt
+\item The input signal is analytically defined.
+\item The model is updated over time using the identification error
+\[
+e(k)=y(k)-\hat{y}(k).
+\]
+\item No explicit train/validation/test split, batch size, or epoch count is reported.
+\end{itemize}
+\end{block}
+
+\end{column}
+
+\begin{column}{0.61\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.9\textheight,keepaspectratio]{wang_simulation1_data_training_highlighted.png}
+
+\vspace{0.03cm}
+{\scriptsize\color{SoftRed}
+}
+\end{column}
+
+\end{columns}
+\end{frame}
+
+\begin{frame}{Wang: reported simulation result}
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.33\textwidth}
+\begin{block}{Comparison}
+\footnotesize
+The paper compares the identification error:
+\[
+e(k)=y(k)-\hat{y}(k)
+\]
+for two methods:
+\begin{itemize}\itemsep2pt
+\item conventional RNN
+\item convex-based LSTM
+\end{itemize}
+\end{block}
+
+\begin{block}{Main observation}
+\footnotesize
+The convex-based LSTM error becomes small faster and remains smoother than the RNN error.
+\end{block}
+
+\begin{block}{Interpretation}
+\footnotesize
+The result supports the paper's claim that the convex LSTM structure improves convergence speed.
+\end{block}
+\end{column}
+
+\begin{column}{0.63\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{comparison_of_rnn_and_lstm_errors.png}
+\end{column}
+
+\end{columns}
+\end{frame}
+
+
+
+
+
+\partslide{Part II}{Ogunmolu/Gans (2016): Deep Dynamic Neural Networks for Nonlinear System Identification}
+
+\begin{frame}{Ogunmolu/Gans: problem, gap, and contribution}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.55\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.34\textheight,keepaspectratio]{ogun_excerpt_goal.png}
+\vspace{0.10cm}
+\paperfig[width=\linewidth,height=0.31\textheight,keepaspectratio]{ogun_excerpt_gap_contribution.png}
+\end{column}
+\begin{column}{0.41\textwidth}
+\begin{block}{Problem definition}
+\small
+Use deep neural-network models to identify nonlinear dynamic systems from sequential input--output data.
+\end{block}
+\begin{block}{Research gap}
+\small
+Highly nonlinear dynamics can be too complicated for a simple closed-form analytical model.
+\end{block}
+\begin{block}{Main contribution}
+\small
+The paper evaluates NN-based Hammerstein and recurrent/LSTM-type dynamic models on SISO and MIMO system-identification datasets.
+\end{block}
+\end{column}
+\end{columns}
+\vspace{-0.04cm}
+{\scriptsize\color{gray}Only the paper lines supporting the goal, gap, and contribution are boxed in red.}
+\end{frame}
+
+\begin{frame}{Ogunmolu/Gans: analytical model question}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.48\textwidth}
+\begin{block}{Question}
+Did the paper end with a final analytical model such as
+\[
+\dot{x}=Ax+Bu?
+\]
+\end{block}
+\begin{block}{Answer}
+\gap{No.} The paper presents data-driven nonlinear input--output identification models. It does not identify one final constant state-space pair $(A,B)$.
+\end{block}
+\end{column}
+\begin{column}{0.48\textwidth}
+\paperfig[width=\linewidth,height=0.46\textheight,keepaspectratio]{ogun_excerpt_gap_contribution.png}
+\begin{block}{How to say it in the presentation}
+\small
+The authors use neural networks because the nonlinear dynamics are difficult to write as closed-form equations. Therefore, the result is a learned dynamic estimator, not an explicit linear state-space law.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Ogunmolu/Gans methodology: Hammerstein model}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.47\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.36\textheight,keepaspectratio]{ogun_excerpt_hammerstein_fig5.png}
+\vspace{0.10cm}
+\paperfig[width=\linewidth,height=0.36\textheight,keepaspectratio]{ogun_excerpt_hammerstein_text.png}
+\end{column}
+\begin{column}{0.49\textwidth}
+\begin{block}{Main modeling idea}
+\small
+The Hammerstein structure separates the model into:
+\begin{itemize}\itemsep2pt
+\item a nonlinear neural-network block, $g(\cdot)$;
+\item a linear dynamic block, $G(z^{-1})$;
+\item an output prediction $y(n)$.
+\end{itemize}
+\end{block}
+\begin{block}{Why this is relevant}
+\small
+This is a dynamic input--output model. It supports the same general direction as my simulation: learning actuator dynamics directly from measured time-series data.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Ogunmolu/Gans methodology: LSTM architecture}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.56\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.76\textheight,keepaspectratio]{ogun_excerpt_lstm_architecture.png}
+\end{column}
+\begin{column}{0.40\textwidth}
+\begin{block}{Reported architecture}
+\small
+The paper replaces the recurrent nonlinear element with LSTM modules:
+\[
+1\rightarrow1,\quad 1\rightarrow10,\quad 10\rightarrow100,\quad 100\rightarrow1.
+\]
+\end{block}
+\begin{block}{Presentation point}
+\small
+The important idea is not a static input--output fit. The paper uses recurrent dynamic neural networks to include time-history effects.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Ogunmolu/Gans: data and training/test usage}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.57\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.70\textheight,keepaspectratio]{ogun_excerpt_data_training.png}
+\end{column}
+\begin{column}{0.39\textwidth}
+\begin{block}{Soft-robot dataset}
+\small
+\begin{itemize}\itemsep2pt
+\item SISO experiment.
+\item Input: valve current in mA.
+\item Output: head motion in mm.
+\item 10,070 offline input--output samples.
+\end{itemize}
+\end{block}
+\begin{block}{Training/test protocol}
+\small
+\begin{itemize}\itemsep2pt
+\item 60\% training, 40\% testing.
+\item Mini-batch size: 100 samples.
+\item Training: 50 epochs.
+\item No validation split is reported.
+\end{itemize}
+\end{block}
+\begin{block}{Benchmark dataset}
+\small
+GlassFurnace: 3 inputs and 6 outputs.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Ogunmolu/Gans: reported experimental results}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.56\textwidth}
+\centering
+\paperfig[width=\linewidth,height=0.34\textheight,keepaspectratio]{ogun_excerpt_results_softrobot_table.png}
+\vspace{0.10cm}
+\paperfig[width=\linewidth,height=0.32\textheight,keepaspectratio]{ogun_excerpt_results_glassfurnace_table.png}
+\end{column}
+\begin{column}{0.40\textwidth}
+\begin{block}{Soft-robot result}
+\small
+The reported fit values are very high for all tested models. LSTM gives high fit, but it is not the lowest-MSE model in this table.
+\end{block}
+\begin{block}{GlassFurnace result}
+\small
+The benchmark result shows that model architecture matters. Vanilla LSTM performs poorly, while FastLSTM improves the result.
+\end{block}
+\begin{block}{Main lesson}
+\small
+Dynamic neural networks can model nonlinear systems, but architecture and data usage strongly affect the final accuracy.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+
+
+
+% -------------------------------------------------------------------------
+% Three clear comparison slides: Wang vs. Ogunmolu/Gans and my simulation
+% -------------------------------------------------------------------------
+
+\begin{frame}{Paper 1 vs. Paper 2: main difference}
+\scriptsize
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.485\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=DeepBlue,
+colbacktitle=DeepBlue,
+coltitle=white,
+title=\textbf{Paper 1: Wang (2017)},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,
+height=0.58\textheight
+]
+\textbf{Main focus}\par
+Build a new LSTM-based \kw{identifier} for nonlinear dynamic systems.
+
+\vspace{0.10cm}
+\textbf{Main method}\par
+Use measured input and output histories:
+\[
+[u_{\rm past},y_{\rm past}]\rightarrow\hat y(k).
+\]
+Combine several LSTMs by convex weighting:
+\[
+\hat y=\sum_i \alpha_i\hat y_i.
+\]
+
+\vspace{0.08cm}
+\textbf{Main result}\par
+Faster and smoother identification-error convergence than conventional RNN.
+
+\vspace{0.08cm}
+\textbf{Data type}\par
+Mostly simulated nonlinear SISO systems.
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.485\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=SoftBlue,
+colbacktitle=SoftBlue,
+coltitle=white,
+title=\textbf{Paper 2: Ogunmolu/Gans (2016)},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,
+height=0.58\textheight
+]
+\textbf{Main focus}\par
+Compare \kw{deep dynamic neural-network architectures} for system identification.
+
+\vspace{0.10cm}
+\textbf{Main method}\par
+Evaluate several dynamic models:
+\[
+\text{MLP},\ \text{RNN},\ \text{LSTM},\ \text{FastLSTM},\ \text{GRU}.
+\]
+Use recurrent and Hammerstein-type models, not Wang's explicit series--parallel structure.
+
+\vspace{0.08cm}
+\textbf{Main result}\par
+Report fit percentage, MSE, training time, and model comparison.
+
+\vspace{0.08cm}
+\textbf{Data type}\par
+Real soft-robot and GlassFurnace data.
+\end{tcolorbox}
+\end{column}
+
+\end{columns}
+
+\vspace{0.08cm}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=Accent,
+colbacktitle=Accent,
+coltitle=white,
+title=\textbf{One-sentence takeaway},
+fonttitle=\small\bfseries,
+boxrule=0.7pt,
+arc=1.5mm,
+left=2mm,right=2mm,top=1mm,bottom=1mm,
+height=0.15\textheight
+]
+\textbf{Wang} focuses on \kw{how to build the identifier}; \textbf{Ogunmolu/Gans} focuses on \kw{which dynamic neural architecture works better on real data}.
+\end{tcolorbox}
+\end{frame}
+
+
+\begin{frame}{What I used from each paper in my actuator simulation}
+\scriptsize
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=DeepBlue,
+colbacktitle=DeepBlue,
+coltitle=white,
+title=\textbf{From Wang},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,
+height=0.66\textheight
+]
+\begin{itemize}\itemsep3pt
+\item Dynamic input--output view, not static curve fitting.
+\item Series--parallel training with measured histories:
+\[
+[I,x,F]_{\rm past}\rightarrow[\hat x,\hat F]_{\rm next}.
+\]
+\item Parallel/free-running rollout for stronger testing:
+\[
+[I,\hat x,\hat F]_{\rm past}\rightarrow[\hat x,\hat F]_{\rm next}.
+\]
+\item Error and convergence tracking.
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=SoftBlue,
+colbacktitle=SoftBlue,
+coltitle=white,
+title=\textbf{From Ogunmolu/Gans},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,
+height=0.66\textheight
+]
+\begin{itemize}\itemsep3pt
+\item Apply dynamic neural networks to real experimental data.
+\item Compare model behavior instead of assuming one model is best.
+\item Report quantitative metrics:
+\[
+\text{MSE},\ \text{RMSE},\ R^2,\ \text{fit}.
+\]
+\item Show measured--predicted and error plots.
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=Accent,
+colbacktitle=Accent,
+coltitle=white,
+title=\textbf{My final setup},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,
+height=0.66\textheight
+]
+\begin{itemize}\itemsep4pt
+\item \textbf{Input:} $I(k)$, coil current.
+\item \textbf{Outputs:} $x(k)$ and $F(k)$.
+\item \textbf{Window:}
+\[
+[I,x,F]_{\text{past }120}.
+\]
+\item \textbf{Target:}
+\[
+[x,F]_{\rm next}.
+\]
+\item \textbf{Final test:} unseen chirp experiment.
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\end{columns}
+\end{frame}
+
+
+\begin{frame}{Why I implemented these ideas}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.485\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=DeepBlue,
+colbacktitle=DeepBlue,
+coltitle=white,
+title=\textbf{Why Wang's ideas are useful},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,
+height=0.52\textheight
+]
+\begin{itemize}\itemsep4pt
+\item My actuator is dynamic; the current effect depends on recent history.
+\item Series--parallel training is stable because measured past outputs are supplied.
+\item Free-running rollout is a stronger test because the model feeds back its own predictions.
+\item Error curves show whether the model learns dynamics, not only points.
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.485\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=SoftBlue,
+colbacktitle=SoftBlue,
+coltitle=white,
+title=\textbf{Why Ogunmolu/Gans's ideas are useful},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,
+height=0.52\textheight
+]
+\begin{itemize}\itemsep4pt
+\item My data are real experimental time series, not only a simulated equation.
+\item Comparing dynamic neural models helps justify the selected architecture.
+\item Metrics make the results measurable and not only visual.
+\item Prediction and error plots make tracking quality easy to explain.
+\end{itemize}
+\end{tcolorbox}
+\end{column}
+
+\end{columns}
+
+\vspace{0.10cm}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=Accent,
+colbacktitle=Accent,
+coltitle=white,
+title=\textbf{How this guides my simulation},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.4mm,bottom=1.4mm,
+height=0.22\textheight
+]
+I combine the two lessons: \textbf{Wang} guides the identification structure and rollout tests, while \textbf{Ogunmolu/Gans} guides practical evaluation on experimental data. Therefore, my simulation reports \kw{one-step prediction}, \kw{closed-loop unseen-chirp simulation}, and quantitative metrics.
+
+\vspace{0.03cm}
+{\tiny\color{gray}\textbf{Note:} I use ideas from both papers, but I do not claim that Ogunmolu/Gans used Wang's exact series--parallel implementation.}
+\end{tcolorbox}
+\end{frame}
+
+
+
+\partslide{Part III}{My Actuator Simulation: Series, Series--Parallel, and Parallel Results}
+
+\begin{frame}{My simulation: data usage and unseen test}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.34\textwidth}
+\begin{block}{Development data}
+\begin{itemize}\itemsep2pt
+\item Four chirp experiments:
+\[
+67,\ 87,\ 107,\ 127\ \mathrm{mA}.
+\]
+\item Random non-overlapping blocks are used for training and validation.
+\item This helps cover different chirp-frequency regions.
+\end{itemize}
+\end{block}
+\begin{block}{Final test}
+\[
+147\ \mathrm{mA}\rightarrow\text{unseen test only}.
+\]
+No normalization, training, or validation uses this record.
+\end{block}
+\end{column}
+\begin{column}{0.62\textwidth}
+\centering
+\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{02_data_usage_summary.png}{Training, validation, and test data usage}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{My simulation: three implemented identification structures}
+\scriptsize
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+\begin{columns}[T,onlytextwidth]
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=DeepBlue,
+colbacktitle=DeepBlue,
+coltitle=white,
+title=\textbf{Series},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.4mm,bottom=1.4mm,
+height=0.56\textheight
+]
+\textbf{Input-only model}
+\[
+[I,\Delta I,I_{DC}]_{\rm past}
+\rightarrow
+[\hat x,\hat F]_{\rm next}
+\]
+No output history is supplied.
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=SoftBlue,
+colbacktitle=SoftBlue,
+coltitle=white,
+title=\textbf{Series--parallel},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.4mm,bottom=1.4mm,
+height=0.56\textheight
+]
+\textbf{Measured-feedback model}
+\[
+[I,\Delta I,I_{DC},x,F]_{\rm past}
+\rightarrow
+[\hat x,\hat F]_{\rm next}
+\]
+Measured output history is supplied.
+\end{tcolorbox}
+\end{column}
+
+\begin{column}{0.32\textwidth}
+\begin{tcolorbox}[
+enhanced,
+colback=LightGray,
+colframe=Accent,
+colbacktitle=Accent,
+coltitle=white,
+title=\textbf{Parallel},
+fonttitle=\small\bfseries,
+boxrule=0.8pt,
+arc=2mm,
+left=2mm,right=2mm,top=1.4mm,bottom=1.4mm,
+height=0.56\textheight
+]
+\textbf{Free-running model}
+\[
+[I,\Delta I,I_{DC},\hat x,\hat F]_{\rm past}
+\rightarrow
+[\hat x,\hat F]_{\rm next}
+\]
+Predictions are fed back recursively.
+\end{tcolorbox}
+\end{column}
+
+\end{columns}
+\vspace{0.05cm}
+\begin{block}{Comparison question}
+Which structure best predicts displacement and Lorentz force on the unseen 147 mA chirp?
+\end{block}
+\end{frame}
+
+\begin{frame}{My simulation: training idea}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.48\textwidth}
+\begin{block}{Architecture}
+The known current features first pass through a static nonlinear block:
+\[
+[I,\Delta I,I_{DC}]\rightarrow g_{\theta}(\cdot).
+\]
+Then an LSTM models the dynamic time-history relation.
+\end{block}
+\begin{block}{Training stages}
+\begin{itemize}\itemsep2pt
+\item Series: trained from input history only.
+\item Series--parallel: trained with measured output history.
+\item Parallel: starts from series--parallel weights and is fine-tuned recursively.
+\end{itemize}
+\end{block}
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{block}{Why random blocks?}
+The chirp frequency changes over time. Random non-overlapping blocks help training and validation include different frequency regions without leaking nearly identical LSTM windows.
+\end{block}
+\begin{block}{How to interpret accuracy}
+Series--parallel is usually easier. Parallel is harder because prediction errors are reused as future inputs.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Simulation result: convergence of all structures}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.31\textwidth}
+\begin{block}{What to check}
+\begin{itemize}\itemsep2pt
+\item Training loss trend.
+\item Validation loss trend.
+\item Differences between the three structures.
+\end{itemize}
+\end{block}
+\begin{block}{Important note}
+Parallel loss is a harder recursive objective, so it should not be compared blindly with one-step loss.
+\end{block}
+\end{column}
+\begin{column}{0.65\textwidth}
+\centering
+\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{01_all_structures_cost.png}{Training and validation cost}
+\end{column}
+\end{columns}
+\end{frame}
+
+
+\begin{frame}{Simulation result: convergence of all structures}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.31\textwidth}
+\begin{block}{What to check}
+\begin{itemize}\itemsep2pt
+\item Training loss trend.
+\item Validation loss trend.
+\item Whether series--parallel converges more smoothly than the others.
+\end{itemize}
+\end{block}
+\begin{block}{Interpretation}
+Series--parallel is expected to train more stably because it uses measured output history. Parallel is harder because it reuses its own predictions recursively.
+\end{block}
+\end{column}
+\begin{column}{0.65\textwidth}
+\centering
+\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{01_all_structures_cost.png}{Training and validation cost}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Simulation result: series baseline tracking on unseen 147 mA chirp}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.31\textwidth}
+\begin{block}{Why show series first?}
+The series structure is the simplest baseline. It uses only input history and does not receive output history.
+\end{block}
+\begin{block}{Message}
+If series--parallel performs better than this baseline, then measured-output history is helping the identifier.
+\end{block}
+\end{column}
+\begin{column}{0.65\textwidth}
+\centering
+\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{06_series_measured_vs_predicted.png}{Series measured versus predicted}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Simulation result: series--parallel tracking on unseen 147 mA chirp}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.31\textwidth}
+\begin{block}{Why this is important}
+This is Wang's main identification idea during training: use measured past outputs together with past inputs.
+\end{block}
+\begin{block}{What to look for}
+The predicted displacement and force should lie closest to the measured curves. This is the expected advantage of the series--parallel strategy.
+\end{block}
+\end{column}
+\begin{column}{0.65\textwidth}
+\centering
+\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{06_series_parallel_measured_vs_predicted.png}{Series--parallel measured versus predicted}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Simulation result: parallel free-running tracking on unseen 147 mA chirp}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.31\textwidth}
+\begin{block}{Why parallel is harder}
+After initialization, the model feeds back its own previous predictions:
+\[
+[I,\Delta I,I_{DC},\hat{x},\hat{F}]_{past}
+\rightarrow[\hat{x},\hat{F}]_{next}.
+\]
+\end{block}
+\begin{block}{Expected behavior}
+Parallel is a stronger test, but its error can accumulate. So it is common to see more drift than in series--parallel one-step prediction.
+\end{block}
+\end{column}
+\begin{column}{0.65\textwidth}
+\centering
+\simfig[width=\linewidth,height=0.78\textheight,keepaspectratio]{06_parallel_measured_vs_predicted.png}{Parallel measured versus predicted}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Simulation result: direct structure comparison on the unseen test}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.48\textwidth}
+\begin{block}{Displacement error comparison}
+Small non-drifting error means better tracking. This figure compares the three structures directly on displacement.
+\end{block}
+\centering
+\simfig[width=\linewidth,height=0.44\textheight,keepaspectratio]{04_displacement_errors_all_structures.png}{Displacement errors}
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{block}{Force error comparison}
+This figure compares the three structures directly on Lorentz-force prediction error.
+\end{block}
+\centering
+\simfig[width=\linewidth,height=0.44\textheight,keepaspectratio]{04_force_errors_all_structures.png}{Force errors}
+\end{column}
+\end{columns}
+\vspace{0.05cm}
+\begin{block}{Key point}
+These two plots make the structure comparison much clearer than the old full-record overlay plots, because the errors can be read directly without one diverging curve dominating the vertical axis.
+\end{block}
+\end{frame}
+
+\begin{frame}{Simulation result: accuracy table and regression comparison}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.48\textwidth}
+\begin{block}{Regression view}
+For a strong predictor, the points should cluster near the 45-degree line. This helps visualize prediction quality.
+\end{block}
+\centering
+\simfig[width=\linewidth,height=0.42\textheight,keepaspectratio]{08_all_structures_regression_comparison.png}{Regression comparison}
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{block}{Accuracy summary}
+Reported metrics are RMSE, MAE, $R^2$, and Fit\%. These allow a direct numerical comparison between series, series--parallel, and parallel.
+\end{block}
+\centering
+\simfig[width=\linewidth,height=0.42\textheight,keepaspectratio]{05_all_structures_accuracy_table.png}{Accuracy table}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Main result from my simulation}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.48\textwidth}
+\begin{block}{What the figures show}
+\begin{itemize}\itemsep2pt
+\item The \textbf{series} model is a useful baseline.
+\item The \textbf{series--parallel} model gives the clearest one-step tracking and usually the best accuracy.
+\item The \textbf{parallel} model is the strictest test because it is free-running and can accumulate error.
+\end{itemize}
+\end{block}
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{block}{Takeaway about Wang's strategy}
+The advantage of the \textbf{series--parallel strategy} is that it uses measured past outputs during training and one-step prediction. This makes learning easier and usually more stable than pure parallel free-running prediction.
+\end{block}
+\begin{block}{Why keep parallel?}
+Parallel is still valuable because it tests whether the learned model can behave like a dynamic simulator when only input and its own past predictions are available.
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Final takeaways}
+\begin{block}{Wang (2017)}
+The main contribution is nonlinear dynamic system identification using LSTM models and series--parallel/parallel prediction ideas.
+\end{block}
+\begin{block}{Ogunmolu/Gans (2016)}
+The main contribution is evaluating deep dynamic neural-network structures for nonlinear system identification on experimental data.
+\end{block}
+\begin{block}{My simulation}
+The updated simulation trains and compares three structures: series, series--parallel, and parallel. It uses random non-overlapping blocks from 67--127 mA for training/validation and keeps 147 mA completely unseen for the final test.
+\end{block}
+\end{frame}
+
+\end{document}
