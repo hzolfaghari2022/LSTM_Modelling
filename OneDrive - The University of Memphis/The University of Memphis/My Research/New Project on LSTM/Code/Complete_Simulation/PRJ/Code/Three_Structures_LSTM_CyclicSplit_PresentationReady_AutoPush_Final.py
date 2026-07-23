@@ -116,6 +116,13 @@ ROLLOUT_STRIDE = 100
 
 RANDOM_SEED = 123
 
+# Automatic GitHub push after a completely successful simulation run.
+# Set this to False whenever you want to run the code without pushing.
+AUTO_GIT_PUSH = True
+GIT_REPOSITORY_SSH = "git@github.com:hzolfaghari2022/LSTM_Modelling.git"
+GIT_USER_NAME = "Hussein Zolfaghari"
+GIT_USER_EMAIL = "h.zolfaghari2015@gmail.com"
+
 DEVELOPMENT_SHEETS = [
     "DC_Offset_67mA",
     "DC_Offset_87mA",
@@ -2187,9 +2194,6 @@ def make_accuracy_table(
 # GITHUB AUTOMATIC PUSH
 # ---------------------------------------------------------------------
 
-REPO_SSH = "git@github.com:hzolfaghari2022/LSTM_Modelling.git"
-
-
 def run_git(command: str, working_folder: Path, check: bool = True) -> tuple[int, str]:
     """Run one Git command and print its output."""
     print(f"  $ {command}")
@@ -2221,7 +2225,7 @@ def git_push_to_github(repository_folder: Path) -> None:
     print()
     print("=" * 76)
     print("Automatic GitHub push")
-    print("Repository: hzolfaghari2022/LSTM_Modelling")
+    print(f"Repository: {GIT_REPOSITORY_SSH}")
     print("=" * 76)
 
     repository_folder = Path(repository_folder).resolve()
@@ -2255,12 +2259,12 @@ def git_push_to_github(repository_folder: Path) -> None:
 
     # Use the same Git identity and SSH repository as the supplied code.
     run_git(
-        'git config user.name "Hussein Zolfaghari"',
+        f'git config user.name "{GIT_USER_NAME}"',
         repository_folder,
     )
 
     run_git(
-        'git config user.email "h.zolfaghari2015@gmail.com"',
+        f'git config user.email "{GIT_USER_EMAIL}"',
         repository_folder,
     )
 
@@ -2272,18 +2276,18 @@ def git_push_to_github(repository_folder: Path) -> None:
 
     if remote_code != 0:
         run_git(
-            f"git remote add origin {REPO_SSH}",
+            f"git remote add origin {GIT_REPOSITORY_SSH}",
             repository_folder,
         )
 
-    elif current_remote.strip() != REPO_SSH:
+    elif current_remote.strip() != GIT_REPOSITORY_SSH:
         run_git(
-            f"git remote set-url origin {REPO_SSH}",
+            f"git remote set-url origin {GIT_REPOSITORY_SSH}",
             repository_folder,
         )
 
     else:
-        print(f"Remote origin is already correct: {REPO_SSH}")
+        print(f"Remote origin is already correct: {GIT_REPOSITORY_SSH}")
 
     run_git(
         "git branch -M main",
@@ -2751,7 +2755,12 @@ def main() -> None:
     print("=" * 76)
 
     # Automatically commit and push this code and the generated results.
-    git_push_to_github(ROOT)
+    # This is reached only after training, evaluation, and figure generation
+    # have all completed successfully.
+    if AUTO_GIT_PUSH:
+        git_push_to_github(ROOT)
+    else:
+        print("Automatic GitHub push is disabled (AUTO_GIT_PUSH = False).")
 
     if os.name == "nt":
         try:
