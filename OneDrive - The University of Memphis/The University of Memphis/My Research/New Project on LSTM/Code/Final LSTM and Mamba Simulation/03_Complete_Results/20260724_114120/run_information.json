@@ -1,0 +1,25 @@
+{
+  "device": "cpu",
+  "development_sheets": [
+    "DC_Offset_67mA",
+    "DC_Offset_87mA",
+    "DC_Offset_107mA",
+    "DC_Offset_127mA"
+  ],
+  "test_sheet": "DC_Offset_147mA",
+  "window": 120,
+  "hidden_size": 64,
+  "static_size": 24,
+  "series_epochs": 15,
+  "series_parallel_epochs": 15,
+  "parallel_epochs": 8,
+  "parallel_horizon": 200,
+  "training_seconds": 70.30626219999976,
+  "split_strategy": "cyclic_blocked_train_validation_development_test",
+  "cyclic_train_samples": 1000,
+  "cyclic_validation_samples": 500,
+  "cyclic_development_test_samples": 500,
+  "guard_gap_samples": 120,
+  "random_block_size_argument_not_used_in_cyclic_mode": 1000,
+  "quick_mode": false
+}
