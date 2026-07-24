@@ -13,7 +13,7 @@
   "one_step_epochs": 6,
   "rollout_epochs": 2,
   "rollout_horizon": 50,
-  "training_seconds": 12.169175099930726,
+  "training_seconds": 14.713109000003897,
   "free_running_valid": false,
   "free_running_validity_messages": [
     "displacement inaccurate rollout: RMSE=6.00402 mm exceeds measured range=2.56617 mm",

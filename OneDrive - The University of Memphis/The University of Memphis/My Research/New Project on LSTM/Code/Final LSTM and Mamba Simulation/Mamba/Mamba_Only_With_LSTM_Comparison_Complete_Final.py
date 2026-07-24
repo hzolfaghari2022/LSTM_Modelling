@@ -19,8 +19,10 @@ Outputs
 3. Persistence baseline.
 4. Metrics, prediction CSV files, model weights, normalizer parameters,
    training curves, tracking plots, error plots, parity/regression plots,
-   a free-running stability diagnostic, and an optional comparison with the
-   newest LSTM metrics file found under 03_Complete_Results.
+   a free-running stability diagnostic, and a complete comparison with the
+   newest LSTM result set found under 03_Complete_Results. The comparison
+   includes common metrics, tracking, errors, regression, free-running
+   stability, and an automatically generated model-selection summary.
 
 Important implementation note
 -----------------------------
@@ -136,6 +138,14 @@ AUTO_GIT_PUSH = True
 GIT_REPOSITORY_SSH = "git@github.com:hzolfaghari2022/LSTM_Modelling.git"
 GIT_USER_NAME = "Hussein Zolfaghari"
 GIT_USER_EMAIL = "h.zolfaghari2015@gmail.com"
+
+# LSTM comparison settings. Run the LSTM simulation at least once before this
+# Mamba script. By default, the newest compatible LSTM result folder is used.
+# To force a specific folder in PowerShell, use for example:
+#   $env:LSTM_RESULTS_FOLDER="C:\\path\\to\\03_Complete_Results\\20260724_120000"
+LSTM_RESULTS_FOLDER = os.environ.get("LSTM_RESULTS_FOLDER", "").strip()
+REQUIRE_LSTM_COMPARISON = True
+COMPARISON_SCATTER_MAX_POINTS = 5000
 
 DEVELOPMENT_SHEETS = [
     "DC_Offset_67mA",
@@ -1437,77 +1447,562 @@ def make_rollout_diagnostic(
     save_figure(figure, folder / "06_mamba_free_running_diagnostic.png")
 
 
-def find_latest_lstm_metrics() -> Path | None:
-    candidates = list(ROOT.glob("03_Complete_Results/**/all_structures_metrics.csv"))
-    if not candidates:
-        return None
-    return max(candidates, key=lambda path: path.stat().st_mtime)
+def _compatible_lstm_pair(folder: Path) -> tuple[Path, Path] | None:
+    """Return the metrics/prediction pair in one LSTM result folder."""
+    candidates = [
+        (
+            folder / "all_structures_metrics.csv",
+            folder / "147mA_all_structures_predictions.csv",
+        ),
+        # Legacy names from the earlier reviewed package.
+        (
+            folder / "all_structures_metrics_revised.csv",
+            folder / "147mA_all_structures_predictions_original.csv",
+        ),
+    ]
+    for metrics_path, prediction_path in candidates:
+        if metrics_path.exists() and prediction_path.exists():
+            return metrics_path, prediction_path
+    return None
 
+
+def find_latest_lstm_result_pair() -> tuple[Path, Path]:
+    """Locate newest complete LSTM result pair, including sibling folders."""
+    if LSTM_RESULTS_FOLDER:
+        requested = Path(LSTM_RESULTS_FOLDER).expanduser().resolve()
+        direct = _compatible_lstm_pair(requested)
+        if direct is not None:
+            return direct
+        roots = [requested]
+    else:
+        roots = [ROOT, ROOT.parent]
+        if ROOT.parent.parent != ROOT.parent:
+            roots.append(ROOT.parent.parent)
+
+    pairs: list[tuple[Path, Path]] = []
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        print(f"Searching for LSTM results under: {root}")
+        for pattern in ("**/all_structures_metrics.csv", "**/all_structures_metrics_revised.csv"):
+            try:
+                for metrics_path in root.glob(pattern):
+                    folder = metrics_path.parent.resolve()
+                    if folder in seen:
+                        continue
+                    seen.add(folder)
+                    pair = _compatible_lstm_pair(folder)
+                    if pair is not None:
+                        pairs.append(pair)
+            except (OSError, PermissionError):
+                continue
+
+    if not pairs:
+        raise FileNotFoundError(
+            "No complete LSTM result set was found. The revised code searched the "
+            "Mamba folder, its parent, and sibling folders. Run the LSTM code first, "
+            "or set LSTM_RESULTS_FOLDER to the exact timestamped LSTM result folder."
+        )
+
+    return max(pairs, key=lambda pair: max(pair[0].stat().st_mtime, pair[1].stat().st_mtime))
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", newline="", encoding="utf-8-sig") as file:
         return list(csv.DictReader(file))
 
 
-def make_optional_lstm_comparison(
-    mamba_metrics: list[dict],
-    folder: Path,
-) -> None:
-    latest = find_latest_lstm_metrics()
-    if latest is None:
-        print("No previous LSTM metrics CSV found; skipping automatic LSTM comparison figure.")
-        return
+def read_numeric_csv(path: Path) -> dict[str, np.ndarray]:
+    """Read a numeric CSV into a dictionary of float arrays."""
+    rows = read_csv_rows(path)
+    if not rows:
+        raise ValueError(f"The CSV is empty: {path}")
+    columns = list(rows[0].keys())
+    result: dict[str, np.ndarray] = {}
+    for column in columns:
+        try:
+            result[column] = np.asarray(
+                [float(row[column]) for row in rows],
+                dtype=np.float64,
+            )
+        except (TypeError, ValueError, KeyError) as error:
+            raise ValueError(
+                f"Column {column!r} in {path} is not a complete numeric column."
+            ) from error
+    return result
 
-    lstm_rows = read_csv_rows(latest)
-    selected_lstm = [
-        row
-        for row in lstm_rows
-        if row.get("evaluation", "").strip().lower() == "series-parallel"
-    ]
-    selected_mamba = [
-        row
-        for row in mamba_metrics
-        if row["evaluation"] == "Mamba one-step"
-    ]
-    if len(selected_lstm) != 2 or len(selected_mamba) != 2:
-        print(f"Could not build LSTM comparison from {latest}")
-        return
 
-    outputs = ["Displacement", "Lorentz force"]
-    lstm_rmse = []
-    mamba_rmse = []
-    for output in outputs:
-        lstm_row = next(row for row in selected_lstm if row["output"] == output)
-        mamba_row = next(row for row in selected_mamba if row["output"] == output)
-        lstm_rmse.append(float(lstm_row["RMSE"]))
-        mamba_rmse.append(float(mamba_row["RMSE"]))
-
-    x = np.arange(len(outputs))
-    width = 0.36
-    figure, axis = plt.subplots(figsize=(9, 5.5))
-    axis.bar(x - width / 2, lstm_rmse, width, label="Latest LSTM series-parallel")
-    axis.bar(x + width / 2, mamba_rmse, width, label="Mamba one-step")
-    axis.set_xticks(x)
-    axis.set_xticklabels(["Displacement (mm)", "Lorentz force (N)"])
-    axis.set_ylabel("RMSE")
-    axis.set_title("Mamba versus latest LSTM series-parallel result")
-    axis.grid(True, axis="y", alpha=0.3)
-    axis.legend()
-    save_figure(figure, folder / "07_mamba_vs_latest_lstm_rmse.png")
-
-    comparison_rows: list[dict] = []
-    for output, lstm_value, mamba_value in zip(outputs, lstm_rmse, mamba_rmse):
-        comparison_rows.append(
-            {
-                "output": output,
-                "lstm_metrics_source": str(latest),
-                "lstm_series_parallel_RMSE": lstm_value,
-                "mamba_one_step_RMSE": mamba_value,
-                "mamba_minus_lstm_RMSE": mamba_value - lstm_value,
-            }
+def align_to_reference_time(
+    reference_time: np.ndarray,
+    source_time: np.ndarray,
+    values: np.ndarray,
+) -> np.ndarray:
+    """Align one LSTM result channel to the current Mamba test time vector."""
+    if (
+        len(reference_time) == len(source_time)
+        and np.allclose(reference_time, source_time, rtol=1e-7, atol=1e-9)
+    ):
+        return values.astype(np.float64, copy=True)
+    if np.any(np.diff(source_time) <= 0):
+        # Earlier LSTM exports can contain exact duplicate time rows. Sort and
+        # keep the first value at each time so old and new result folders are
+        # both usable for comparison.
+        order = np.argsort(source_time, kind="stable")
+        source_time = source_time[order]
+        values = values[order]
+        source_time, unique_indices = np.unique(source_time, return_index=True)
+        values = values[unique_indices]
+        if np.any(np.diff(source_time) <= 0):
+            raise ValueError("The LSTM prediction time vector cannot be made strictly increasing.")
+    if reference_time[0] < source_time[0] or reference_time[-1] > source_time[-1]:
+        raise ValueError(
+            "The LSTM prediction time range does not cover the Mamba test record."
         )
-    write_rows(folder / "mamba_vs_latest_lstm.csv", comparison_rows)
-    print(f"Created automatic comparison using: {latest}")
+    return np.interp(reference_time, source_time, values).astype(np.float64)
+
+
+def metric_lookup(rows: list[dict], evaluation: str, output: str) -> dict:
+    for row in rows:
+        if row["evaluation"] == evaluation and row["output"] == output:
+            return row
+    raise KeyError(f"Missing metric row: evaluation={evaluation}, output={output}")
+
+
+def parity_panel(
+    axis: plt.Axes,
+    measured_values: np.ndarray,
+    predicted_values: np.ndarray,
+    title: str,
+    unit: str,
+) -> None:
+    mask = np.isfinite(measured_values) & np.isfinite(predicted_values)
+    x = measured_values[mask]
+    y = predicted_values[mask]
+    stride = max(1, len(x) // COMPARISON_SCATTER_MAX_POINTS)
+    lower = float(min(np.min(x), np.min(y)))
+    upper = float(max(np.max(x), np.max(y)))
+    pad = 0.05 * (upper - lower) if upper > lower else 1.0
+    line = np.linspace(lower - pad, upper + pad, 200)
+    slope, intercept, regression_r2 = regression_statistics(x, y)
+
+    axis.scatter(x[::stride], y[::stride], s=8, alpha=0.28)
+    axis.plot(line, line, "--", linewidth=1.2, label="Perfect prediction")
+    if np.isfinite(slope):
+        axis.plot(
+            line,
+            slope * line + intercept,
+            ":",
+            linewidth=1.4,
+            label="Regression",
+        )
+    axis.set_xlim(lower - pad, upper + pad)
+    axis.set_ylim(lower - pad, upper + pad)
+    axis.set_xlabel(f"Measured ({unit})")
+    axis.set_ylabel(f"Predicted ({unit})")
+    axis.set_title(f"{title}\nRegression $R^2$ = {regression_r2:.5f}")
+    axis.grid(True, alpha=0.3)
+    axis.legend(fontsize=7)
+
+
+def make_lstm_mamba_comparison(
+    time_values: np.ndarray,
+    measured: np.ndarray,
+    persistence_prediction: np.ndarray,
+    mamba_one_step: np.ndarray,
+    mamba_free_running: np.ndarray,
+    folder: Path,
+) -> list[str]:
+    """Create every LSTM-versus-Mamba result needed by the report/slides."""
+    metrics_path, predictions_path = find_latest_lstm_result_pair()
+    print("Using LSTM metrics:", metrics_path)
+    print("Using LSTM predictions:", predictions_path)
+
+    lstm_csv = read_numeric_csv(predictions_path)
+    required_columns = {
+        "time_s",
+        "measured_displacement_mm",
+        "series_displacement_mm",
+        "series_parallel_displacement_mm",
+        "parallel_displacement_mm",
+        "measured_force_N",
+        "series_force_N",
+        "series_parallel_force_N",
+        "parallel_force_N",
+    }
+    missing_columns = sorted(required_columns.difference(lstm_csv))
+    if missing_columns:
+        raise KeyError(
+            "The LSTM prediction CSV is missing required columns: "
+            + ", ".join(missing_columns)
+        )
+
+    lstm_time = lstm_csv["time_s"]
+    def aligned(name: str) -> np.ndarray:
+        return align_to_reference_time(time_values, lstm_time, lstm_csv[name])
+
+    lstm_measured = np.column_stack(
+        [aligned("measured_displacement_mm"), aligned("measured_force_N")]
+    )
+    measured_difference = float(np.nanmax(np.abs(lstm_measured - measured)))
+    if measured_difference > 1e-5:
+        print(
+            "WARNING: LSTM and Mamba measured test columns differ by up to "
+            f"{measured_difference:.6g}. The current Mamba workbook values are "
+            "used as the common reference."
+        )
+
+    lstm_series = np.column_stack(
+        [aligned("series_displacement_mm"), aligned("series_force_N")]
+    )
+    lstm_series_parallel = np.column_stack(
+        [
+            aligned("series_parallel_displacement_mm"),
+            aligned("series_parallel_force_N"),
+        ]
+    )
+    lstm_parallel = np.column_stack(
+        [aligned("parallel_displacement_mm"), aligned("parallel_force_N")]
+    )
+
+    comparison_metrics: list[dict] = []
+    comparison_metrics += calculate_metrics(
+        measured[WINDOW:],
+        persistence_prediction[WINDOW:],
+        "Persistence baseline",
+    )
+    comparison_metrics += calculate_metrics(
+        measured[WINDOW:],
+        lstm_series[WINDOW:],
+        "LSTM series",
+    )
+    comparison_metrics += calculate_metrics(
+        measured[WINDOW:],
+        lstm_series_parallel[WINDOW:],
+        "LSTM series-parallel",
+    )
+    comparison_metrics += calculate_metrics(
+        measured[WINDOW:],
+        mamba_one_step[WINDOW:],
+        "Mamba one-step",
+    )
+
+    # Add ranks and relative differences separately for displacement and force.
+    for output_name in ["Displacement", "Lorentz force"]:
+        output_rows = [row for row in comparison_metrics if row["output"] == output_name]
+        output_rows.sort(key=lambda row: float(row["RMSE"]))
+        best_rmse = float(output_rows[0]["RMSE"])
+        lstm_sp_rmse = float(
+            metric_lookup(comparison_metrics, "LSTM series-parallel", output_name)["RMSE"]
+        )
+        for rank, row in enumerate(output_rows, start=1):
+            row["rmse_rank"] = rank
+            row["relative_RMSE_vs_best_percent"] = (
+                100.0 * (float(row["RMSE"]) - best_rmse) / best_rmse
+                if best_rmse > 0 else float("nan")
+            )
+            row["relative_RMSE_vs_LSTM_series_parallel_percent"] = (
+                100.0 * (float(row["RMSE"]) - lstm_sp_rmse) / lstm_sp_rmse
+                if lstm_sp_rmse > 0 else float("nan")
+            )
+
+    metrics_csv_name = "lstm_mamba_comparison_metrics.csv"
+    write_rows(folder / metrics_csv_name, comparison_metrics)
+
+    generated = [metrics_csv_name]
+    evaluation_start = WINDOW
+    zoom_start = max(evaluation_start, int(0.75 * len(time_values)))
+
+    # 07: RMSE comparison. Separate panels preserve displacement/force units.
+    models = [
+        "Persistence baseline",
+        "LSTM series",
+        "LSTM series-parallel",
+        "Mamba one-step",
+    ]
+    figure, axes = plt.subplots(1, 2, figsize=(13, 5.6))
+    for axis, output_name, unit in [
+        (axes[0], "Displacement", "mm"),
+        (axes[1], "Lorentz force", "N"),
+    ]:
+        values = [
+            float(metric_lookup(comparison_metrics, model, output_name)["RMSE"])
+            for model in models
+        ]
+        bars = axis.bar(np.arange(len(models)), values)
+        axis.set_yscale("log")
+        axis.set_xticks(np.arange(len(models)))
+        axis.set_xticklabels(
+            ["Persistence", "LSTM\nseries", "LSTM\nseries-parallel", "Mamba\none-step"],
+            rotation=0,
+        )
+        axis.set_ylabel(f"RMSE ({unit}, logarithmic scale)")
+        axis.set_title(f"{output_name}: lower is better")
+        axis.grid(True, axis="y", which="both", alpha=0.3)
+        for bar, value in zip(bars, values):
+            axis.text(
+                bar.get_x() + bar.get_width() / 2,
+                value,
+                f"{value:.4g}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+    figure.suptitle("Unseen 147 mA test: LSTM and Mamba RMSE comparison", fontsize=14)
+    rmse_name = "07_lstm_mamba_rmse_comparison.png"
+    save_figure(figure, folder / rmse_name)
+    generated.append(rmse_name)
+
+    # 08: Direct fair one-step tracking comparison.
+    figure, axes = plt.subplots(2, 2, figsize=(15, 8))
+    plot_definitions = [
+        (axes[0, 0], evaluation_start, 0, "Complete displacement", "Displacement (mm)"),
+        (axes[1, 0], evaluation_start, 1, "Complete Lorentz force", "Lorentz force (N)"),
+        (axes[0, 1], zoom_start, 0, "High-frequency displacement zoom", "Displacement (mm)"),
+        (axes[1, 1], zoom_start, 1, "High-frequency force zoom", "Lorentz force (N)"),
+    ]
+    for axis, start, column, title, ylabel in plot_definitions:
+        axis.plot(time_values[start:], measured[start:, column], label="Measured", linewidth=1.8)
+        axis.plot(
+            time_values[start:],
+            lstm_series_parallel[start:, column],
+            "--",
+            label="LSTM series-parallel",
+            linewidth=1.3,
+        )
+        axis.plot(
+            time_values[start:],
+            mamba_one_step[start:, column],
+            ":",
+            label="Mamba one-step",
+            linewidth=1.4,
+        )
+        axis.set_title(title)
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel(ylabel)
+        axis.grid(True, alpha=0.3)
+        axis.legend(fontsize=8)
+    figure.suptitle(
+        "Unseen 147 mA test: fair measured-feedback comparison",
+        fontsize=14,
+    )
+    tracking_name = "08_lstm_mamba_tracking_comparison.png"
+    save_figure(figure, folder / tracking_name)
+    generated.append(tracking_name)
+
+    # 09: Common-reference error comparison.
+    figure, axes = plt.subplots(2, 2, figsize=(15, 8))
+    error_defs = [
+        (axes[0, 0], evaluation_start, 0, "Complete displacement error", "Error (mm)"),
+        (axes[1, 0], evaluation_start, 1, "Complete force error", "Error (N)"),
+        (axes[0, 1], zoom_start, 0, "High-frequency displacement error", "Error (mm)"),
+        (axes[1, 1], zoom_start, 1, "High-frequency force error", "Error (N)"),
+    ]
+    for axis, start, column, title, ylabel in error_defs:
+        axis.plot(
+            time_values[start:],
+            measured[start:, column] - persistence_prediction[start:, column],
+            label="Persistence",
+            linewidth=1.0,
+            alpha=0.75,
+        )
+        axis.plot(
+            time_values[start:],
+            measured[start:, column] - lstm_series_parallel[start:, column],
+            label="LSTM series-parallel",
+            linewidth=1.2,
+        )
+        axis.plot(
+            time_values[start:],
+            measured[start:, column] - mamba_one_step[start:, column],
+            label="Mamba one-step",
+            linewidth=1.2,
+        )
+        axis.axhline(0.0, linewidth=0.8)
+        axis.set_title(title)
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel(ylabel)
+        axis.grid(True, alpha=0.3)
+        axis.legend(fontsize=8)
+    figure.suptitle("Unseen 147 mA test: prediction-error comparison", fontsize=14)
+    error_name = "09_lstm_mamba_error_comparison.png"
+    save_figure(figure, folder / error_name)
+    generated.append(error_name)
+
+    # 10: Regression comparison with identical measured references.
+    figure, axes = plt.subplots(2, 2, figsize=(12.5, 10))
+    parity_panel(
+        axes[0, 0],
+        measured[evaluation_start:, 0],
+        lstm_series_parallel[evaluation_start:, 0],
+        "LSTM series-parallel: displacement",
+        "mm",
+    )
+    parity_panel(
+        axes[0, 1],
+        measured[evaluation_start:, 0],
+        mamba_one_step[evaluation_start:, 0],
+        "Mamba one-step: displacement",
+        "mm",
+    )
+    parity_panel(
+        axes[1, 0],
+        measured[evaluation_start:, 1],
+        lstm_series_parallel[evaluation_start:, 1],
+        "LSTM series-parallel: force",
+        "N",
+    )
+    parity_panel(
+        axes[1, 1],
+        measured[evaluation_start:, 1],
+        mamba_one_step[evaluation_start:, 1],
+        "Mamba one-step: force",
+        "N",
+    )
+    figure.suptitle("Unseen 147 mA test: LSTM versus Mamba regression", fontsize=14)
+    regression_name = "10_lstm_mamba_regression_comparison.png"
+    save_figure(figure, folder / regression_name)
+    generated.append(regression_name)
+
+    # 11: Complete metric table for report and presentation.
+    table_rows = []
+    for model in models:
+        for output_name in ["Displacement", "Lorentz force"]:
+            row = metric_lookup(comparison_metrics, model, output_name)
+            table_rows.append(
+                [
+                    model,
+                    output_name,
+                    f"{float(row['RMSE']):.6g}",
+                    f"{float(row['MAE']):.6g}",
+                    f"{float(row['R2']):.6f}",
+                    f"{float(row['fit_percent']):.3f}",
+                    str(row["rmse_rank"]),
+                ]
+            )
+    figure, axis = plt.subplots(figsize=(13, 6.2))
+    axis.axis("off")
+    table = axis.table(
+        cellText=table_rows,
+        colLabels=["Model", "Output", "RMSE", "MAE", "$R^2$", "Fit (%)", "RMSE rank"],
+        loc="center",
+        cellLoc="center",
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(8.5)
+    table.scale(1.0, 1.45)
+    axis.set_title("Unseen 147 mA test: common LSTM and Mamba accuracy table")
+    table_name = "11_lstm_mamba_accuracy_table.png"
+    save_figure(figure, folder / table_name)
+    generated.append(table_name)
+
+    # 12: Long-horizon/free-running stability comparison.
+    lstm_valid, lstm_messages = output_validity(measured, lstm_parallel)
+    mamba_valid, mamba_messages = output_validity(measured, mamba_free_running)
+    figure, axes = plt.subplots(2, 2, figsize=(15, 8))
+    stability_defs = [
+        (axes[0, 0], 0, lstm_parallel, "LSTM parallel displacement", "mm", lstm_valid),
+        (axes[0, 1], 0, mamba_free_running, "Mamba free-running displacement", "mm", mamba_valid),
+        (axes[1, 0], 1, lstm_parallel, "LSTM parallel force", "N", lstm_valid),
+        (axes[1, 1], 1, mamba_free_running, "Mamba free-running force", "N", mamba_valid),
+    ]
+    for axis, column, prediction, title, unit, valid in stability_defs:
+        axis.plot(time_values[evaluation_start:], measured[evaluation_start:, column], label="Measured")
+        axis.plot(time_values[evaluation_start:], prediction[evaluation_start:, column], label="Free-running prediction")
+        axis.set_title(f"{title}\nStatus: {'VALID' if valid else 'INVALID / DIVERGED'}")
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel(f"Output ({unit})")
+        axis.grid(True, alpha=0.3)
+        axis.legend(fontsize=8)
+    detail_lines = [
+        "LSTM: " + ("; ".join(lstm_messages) if lstm_messages else "within validity limits"),
+        "Mamba: " + ("; ".join(mamba_messages) if mamba_messages else "within validity limits"),
+    ]
+    figure.suptitle(
+        "Long-horizon recursive simulation comparison\n" + " | ".join(detail_lines),
+        fontsize=11,
+    )
+    stability_name = "12_lstm_mamba_free_running_stability.png"
+    save_figure(figure, folder / stability_name)
+    generated.append(stability_name)
+
+    # 13: Data-driven model-selection summary for the report/slides.
+    lstm_disp = float(metric_lookup(comparison_metrics, "LSTM series-parallel", "Displacement")["RMSE"])
+    mamba_disp = float(metric_lookup(comparison_metrics, "Mamba one-step", "Displacement")["RMSE"])
+    lstm_force = float(metric_lookup(comparison_metrics, "LSTM series-parallel", "Lorentz force")["RMSE"])
+    mamba_force = float(metric_lookup(comparison_metrics, "Mamba one-step", "Lorentz force")["RMSE"])
+    disp_advantage = 100.0 * (mamba_disp - lstm_disp) / mamba_disp if mamba_disp > 0 else float("nan")
+    force_advantage = 100.0 * (mamba_force - lstm_force) / mamba_force if mamba_force > 0 else float("nan")
+
+    figure, axis = plt.subplots(figsize=(13, 7.2))
+    axis.axis("off")
+    summary = (
+        "CURRENT MODEL-SELECTION RESULT\n\n"
+        "Preferred valid one-step model: LSTM series-parallel\n\n"
+        f"Displacement RMSE: LSTM = {lstm_disp:.6g} mm, Mamba = {mamba_disp:.6g} mm\n"
+        f"LSTM reduction relative to Mamba: {disp_advantage:.1f}%\n\n"
+        f"Force RMSE: LSTM = {lstm_force:.6g} N, Mamba = {mamba_force:.6g} N\n"
+        f"LSTM reduction relative to Mamba: {force_advantage:.1f}%\n\n"
+        "Interpretation for this project:\n"
+        "• The dataset is small and the valid task is local one-step prediction with measured feedback.\n"
+        "• The LSTM gating/recurrent bias fits this actuator dataset better in the current experiment.\n"
+        "• The portable small Mamba model does not yet exploit its expected advantage on very long sequences.\n"
+        "• Neither LSTM parallel nor Mamba free-running is currently acceptable for long-horizon simulation.\n\n"
+        "This conclusion is specific to the present data split, hyperparameters, and implementations."
+    )
+    axis.text(
+        0.03,
+        0.97,
+        summary,
+        va="top",
+        ha="left",
+        fontsize=13,
+        linespacing=1.35,
+        bbox=dict(boxstyle="round,pad=0.8", facecolor="white", edgecolor="0.35"),
+    )
+    summary_name = "13_lstm_mamba_model_selection_summary.png"
+    save_figure(figure, folder / summary_name)
+    generated.append(summary_name)
+
+    summary_json = {
+        "lstm_metrics_source": str(metrics_path),
+        "lstm_predictions_source": str(predictions_path),
+        "preferred_valid_one_step_model": "LSTM series-parallel",
+        "displacement_RMSE": {
+            "LSTM_series_parallel_mm": lstm_disp,
+            "Mamba_one_step_mm": mamba_disp,
+            "LSTM_reduction_relative_to_Mamba_percent": disp_advantage,
+        },
+        "force_RMSE": {
+            "LSTM_series_parallel_N": lstm_force,
+            "Mamba_one_step_N": mamba_force,
+            "LSTM_reduction_relative_to_Mamba_percent": force_advantage,
+        },
+        "LSTM_parallel_valid": lstm_valid,
+        "Mamba_free_running_valid": mamba_valid,
+        "interpretation": [
+            "Current LSTM series-parallel result is better than current Mamba one-step result.",
+            "The result is experiment-specific and does not imply that LSTM is universally better than Mamba.",
+            "Both recursive free-running models require further stability work.",
+        ],
+    }
+    summary_json_name = "lstm_mamba_comparison_summary.json"
+    (folder / summary_json_name).write_text(
+        json.dumps(summary_json, indent=2),
+        encoding="utf-8",
+    )
+    generated.append(summary_json_name)
+
+    manifest_name = "lstm_mamba_comparison_figure_manifest.txt"
+    (folder / manifest_name).write_text(
+        "Figures generated for the report and presentation:\n"
+        + "\n".join(name for name in generated if name.lower().endswith(".png"))
+        + "\n",
+        encoding="utf-8",
+    )
+    generated.append(manifest_name)
+
+    print("Created complete LSTM-versus-Mamba comparison outputs.")
+    return generated
 
 
 # -----------------------------------------------------------------------------
@@ -1907,7 +2402,25 @@ def main() -> None:
         validity_messages,
         output_folder,
     )
-    make_optional_lstm_comparison(metrics, output_folder)
+    try:
+        comparison_outputs = make_lstm_mamba_comparison(
+            raw_data[TEST_SHEET][:, 0],
+            measured,
+            baseline_prediction,
+            one_step_prediction,
+            free_running_prediction,
+            output_folder,
+        )
+        comparison_completed = True
+    except FileNotFoundError as error:
+        comparison_outputs = []
+        comparison_completed = False
+        warning_text = str(error)
+        print("WARNING:", warning_text)
+        (output_folder / "LSTM_COMPARISON_NOT_GENERATED.txt").write_text(
+            warning_text + "\n\nMamba-only results were still generated successfully.",
+            encoding="utf-8",
+        )
 
     copy_figures_for_report_and_presentation(
         complete_folder,
@@ -1928,6 +2441,7 @@ def main() -> None:
         "mamba_one_step_model.pt",
         "mamba_free_running_model.pt",
     ]
+    expected_files.extend(comparison_outputs)
     missing = [name for name in expected_files if not (output_folder / name).exists()]
     if missing:
         raise RuntimeError("Missing expected Mamba outputs: " + ", ".join(missing))
@@ -1939,6 +2453,7 @@ def main() -> None:
     print(f"Report figures: {report_folder}")
     print(f"Presentation figures: {presentation_folder}")
     print(f"Complete results: {complete_folder}")
+    print("LSTM-versus-Mamba comparison figures were copied to both figure folders." if comparison_completed else "LSTM comparison was skipped because no LSTM result folder was found.")
     print(f"Free-running status: {'VALID' if free_running_valid else 'INVALID / DIVERGED'}")
     print("=" * 78)
 

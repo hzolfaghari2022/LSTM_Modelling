@@ -1,0 +1,22 @@
+{
+  "lstm_metrics_source": "C:\\Users\\hzlfghri\\OneDrive - The University of Memphis\\The University of Memphis\\My Research\\New Project on LSTM\\Code\\Other\\LSTM Final Simulation\\03_Complete_Results\\20260724_100508\\all_structures_metrics.csv",
+  "lstm_predictions_source": "C:\\Users\\hzlfghri\\OneDrive - The University of Memphis\\The University of Memphis\\My Research\\New Project on LSTM\\Code\\Other\\LSTM Final Simulation\\03_Complete_Results\\20260724_100508\\147mA_all_structures_predictions.csv",
+  "preferred_valid_one_step_model": "LSTM series-parallel",
+  "displacement_RMSE": {
+    "LSTM_series_parallel_mm": 0.008223132798174715,
+    "Mamba_one_step_mm": 0.008841425658959593,
+    "LSTM_reduction_relative_to_Mamba_percent": 6.993135322676407
+  },
+  "force_RMSE": {
+    "LSTM_series_parallel_N": 0.0001846729553864659,
+    "Mamba_one_step_N": 0.0003039091967957716,
+    "LSTM_reduction_relative_to_Mamba_percent": 39.23416687170313
+  },
+  "LSTM_parallel_valid": false,
+  "Mamba_free_running_valid": false,
+  "interpretation": [
+    "Current LSTM series-parallel result is better than current Mamba one-step result.",
+    "The result is experiment-specific and does not imply that LSTM is universally better than Mamba.",
+    "Both recursive free-running models require further stability work."
+  ]
+}

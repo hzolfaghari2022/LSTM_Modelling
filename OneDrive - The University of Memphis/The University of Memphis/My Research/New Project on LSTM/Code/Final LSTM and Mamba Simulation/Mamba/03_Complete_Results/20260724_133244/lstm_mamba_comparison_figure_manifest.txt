@@ -1,0 +1,8 @@
+Figures generated for the report and presentation:
+07_lstm_mamba_rmse_comparison.png
+08_lstm_mamba_tracking_comparison.png
+09_lstm_mamba_error_comparison.png
+10_lstm_mamba_regression_comparison.png
+11_lstm_mamba_accuracy_table.png
+12_lstm_mamba_free_running_stability.png
+13_lstm_mamba_model_selection_summary.png
