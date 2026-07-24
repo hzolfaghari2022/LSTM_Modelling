@@ -1,0 +1,3 @@
+output,lstm_metrics_source,lstm_series_parallel_RMSE,mamba_one_step_RMSE,mamba_minus_lstm_RMSE
+Displacement,C:\Users\hzlfghri\OneDrive - The University of Memphis\The University of Memphis\My Research\New Project on LSTM\Code\Final LSTM and Mamba Simulation\03_Complete_Results\20260724_114120\all_structures_metrics.csv,0.008223132763293515,0.008841425658959593,0.000618292895666079
+Lorentz force,C:\Users\hzlfghri\OneDrive - The University of Memphis\The University of Memphis\My Research\New Project on LSTM\Code\Final LSTM and Mamba Simulation\03_Complete_Results\20260724_114120\all_structures_metrics.csv,0.000184672956538512,0.0003039091967957716,0.00011923624025725961

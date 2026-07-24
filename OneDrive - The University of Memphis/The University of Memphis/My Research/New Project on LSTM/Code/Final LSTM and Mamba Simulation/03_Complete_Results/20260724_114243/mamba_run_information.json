@@ -1,0 +1,29 @@
+{
+  "implementation": "portable_pure_pytorch_mamba1_selective_ssm",
+  "official_fused_kernel_used": false,
+  "device": "cpu",
+  "quick_mode": false,
+  "window": 120,
+  "d_model": 24,
+  "d_state": 6,
+  "d_conv": 4,
+  "expand": 2,
+  "n_mamba_blocks": 1,
+  "trainable_parameters": 5906,
+  "one_step_epochs": 6,
+  "rollout_epochs": 2,
+  "rollout_horizon": 50,
+  "training_seconds": 12.91638830001466,
+  "free_running_valid": false,
+  "free_running_validity_messages": [
+    "displacement inaccurate rollout: RMSE=6.00402 mm exceeds measured range=2.56617 mm",
+    "force inaccurate rollout: RMSE=0.0891351 N exceeds measured range=0.039594 N"
+  ],
+  "development_sheets": [
+    "DC_Offset_67mA",
+    "DC_Offset_87mA",
+    "DC_Offset_107mA",
+    "DC_Offset_127mA"
+  ],
+  "test_sheet": "DC_Offset_147mA"
+}
