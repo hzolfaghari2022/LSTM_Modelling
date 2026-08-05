@@ -1,0 +1,8 @@
+MINIMAL FINAL FINE-TUNING VERIFIED RESULTS
+
+       Output Unit      MSE     RMSE      MAE       R2  Fit_percent
+ Displacement   mm 0.017953 0.133988 0.097630 0.869344    63.853597
+Lorentz force    N 0.000003 0.001616 0.001118 0.949244    77.470976
+
+Fine-tuning: 4 epochs, learning rate 1e-4, all 67-127 mA development windows.
+The 147 mA record remained untouched.

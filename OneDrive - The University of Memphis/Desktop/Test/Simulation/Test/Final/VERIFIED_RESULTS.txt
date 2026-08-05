@@ -1,0 +1,13 @@
+VERIFIED PURE 147 mA TEST RESULTS
+
+Displacement
+RMSE: 0.165691 mm
+R2: 0.800200
+Fit: 55.3010%
+
+Lorentz force
+RMSE: 0.00180194 N
+R2: 0.936895
+Fit: 74.8793%
+
+Generated with 20 epochs, seed 123, and the included workbook.
