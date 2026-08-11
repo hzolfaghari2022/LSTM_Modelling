@@ -1,0 +1,471 @@
+--- original/Final/github_push.py
++++ modified/Final/github_push.py
+@@ -4,34 +4,37 @@
+ This file contains only Git/GitHub-related code. It does not change the
+ simulation, model, training, data processing, metrics, or figures.
+ 
+-Expected setup:
+-    The simulation folder must be located inside a cloned Git repository.
+-
+-Example:
+-    LSTM_Modelling/
+-        FARNN_COMSOL/
+-            main.py
+-            github_push.py
+-            ...
+-
+-Use from main.py:
+-    from github_push import GitPushError, push_simulation
+-
+-    try:
+-        push_simulation(HERE)
+-    except GitPushError as error:
+-        print(error)
++For this project, the expected GitHub repository is:
++
++    hzolfaghari2022/LSTM_Modelling
++
++The helper:
++1. Verifies that the local Git remote points to that repository.
++2. Stages only the folder passed to push_simulation(...).
++3. Commits new changes when they exist.
++4. Continues when a previous run already created an unpushed commit.
++5. Pulls with rebase and autostash so unrelated tracked edits are protected.
++6. Pushes the current branch.
++7. Verifies that the remote branch contains the same commit.
++
++main.py already calls:
++
++    push_simulation(HERE)
++
++No simulation-code change is required.
+ """
+ 
+ from __future__ import annotations
+ 
+ from datetime import datetime
+ from pathlib import Path
++import re
+ import subprocess
+ 
+ 
+-# GitHub rejects a single normal Git file larger than 100 MB.
+-# A slightly smaller limit gives a clear warning before GitHub rejects it.
++EXPECTED_REPOSITORY = "hzolfaghari2022/LSTM_Modelling"
++
++# GitHub normally rejects a single regular Git file larger than 100 MB.
+ MAX_FILE_SIZE_BYTES = 95 * 1024 * 1024
+ 
+ 
+@@ -45,7 +48,7 @@
+     *,
+     check: bool = True,
+ ) -> subprocess.CompletedProcess[str]:
+-    """Run one Git command and return its completed process."""
++    """Run one Git command and return the completed process."""
+ 
+     try:
+         result = subprocess.run(
+@@ -91,11 +94,71 @@
+         raise GitPushError(
+             "This simulation folder is not inside a cloned Git "
+             "repository.\n\n"
+-            "Clone the repository first, then place the simulation "
+-            "folder inside the cloned LSTM_Modelling folder."
++            "Clone hzolfaghari2022/LSTM_Modelling first, then place "
++            "the Final folder anywhere inside that cloned repository."
+         )
+ 
+     return Path(result.stdout.strip()).resolve()
++
++
++def _repository_slug_from_remote(
++    remote_url: str,
++) -> str:
++    """Convert HTTPS or SSH GitHub URLs to owner/repository form."""
++
++    normalized = remote_url.strip().replace("\\", "/")
++
++    # git@github.com:owner/repository.git
++    if normalized.startswith("git@github.com:"):
++        normalized = normalized.split(":", 1)[1]
++
++    # ssh://git@github.com/owner/repository.git
++    normalized = re.sub(
++        r"^ssh://git@github\.com/",
++        "",
++        normalized,
++        flags=re.IGNORECASE,
++    )
++
++    # https://github.com/owner/repository.git
++    normalized = re.sub(
++        r"^https?://github\.com/",
++        "",
++        normalized,
++        flags=re.IGNORECASE,
++    )
++
++    # git://github.com/owner/repository.git
++    normalized = re.sub(
++        r"^git://github\.com/",
++        "",
++        normalized,
++        flags=re.IGNORECASE,
++    )
++
++    if normalized.endswith(".git"):
++        normalized = normalized[:-4]
++
++    return normalized.strip("/")
++
++
++def _check_repository_target(
++    remote_url: str,
++) -> None:
++    """Prevent an accidental push to a different repository."""
++
++    actual_repository = _repository_slug_from_remote(
++        remote_url
++    )
++
++    if actual_repository.lower() != EXPECTED_REPOSITORY.lower():
++        raise GitPushError(
++            "The local Git remote does not point to the expected "
++            "repository.\n\n"
++            f"Expected: {EXPECTED_REPOSITORY}\n"
++            f"Detected: {actual_repository or remote_url}\n\n"
++            "Correct the origin remote before pushing."
++        )
+ 
+ 
+ def _check_for_very_large_files(
+@@ -134,8 +197,7 @@
+ 
+     if large_files:
+         formatted = "\n".join(
+-            f"  - {path} "
+-            f"({size / (1024 ** 2):.1f} MB)"
++            f"  - {path} ({size / (1024 ** 2):.1f} MB)"
+             for path, size in large_files
+         )
+ 
+@@ -165,6 +227,88 @@
+             normalized_scope + "/"
+         )
+     )
++
++
++def _current_branch(
++    repository_root: Path,
++) -> str:
++    """Return the checked-out branch and reject detached HEAD."""
++
++    branch = _run_git(
++        ["branch", "--show-current"],
++        repository_root,
++    ).stdout.strip()
++
++    if not branch:
++        raise GitPushError(
++            "Git is in a detached-HEAD state. Check out the main branch "
++            "before running the simulation."
++        )
++
++    return branch
++
++
++def _remote_branch_exists(
++    repository_root: Path,
++    remote_name: str,
++    branch: str,
++) -> bool:
++    """Return whether the named branch already exists on the remote."""
++
++    result = _run_git(
++        [
++            "ls-remote",
++            "--exit-code",
++            "--heads",
++            remote_name,
++            branch,
++        ],
++        repository_root,
++        check=False,
++    )
++
++    return result.returncode == 0
++
++
++def _verify_remote_commit(
++    repository_root: Path,
++    remote_name: str,
++    branch: str,
++) -> str:
++    """Verify that local HEAD and the remote branch contain the same SHA."""
++
++    local_sha = _run_git(
++        ["rev-parse", "HEAD"],
++        repository_root,
++    ).stdout.strip()
++
++    remote_result = _run_git(
++        [
++            "ls-remote",
++            remote_name,
++            f"refs/heads/{branch}",
++        ],
++        repository_root,
++    )
++
++    remote_line = remote_result.stdout.strip()
++
++    if not remote_line:
++        raise GitPushError(
++            "The push command returned successfully, but the remote "
++            "branch could not be verified."
++        )
++
++    remote_sha = remote_line.split()[0]
++
++    if local_sha != remote_sha:
++        raise GitPushError(
++            "Remote verification failed.\n\n"
++            f"Local HEAD:  {local_sha}\n"
++            f"Remote HEAD: {remote_sha}"
++        )
++
++    return local_sha
+ 
+ 
+ def push_simulation(
+@@ -173,25 +317,11 @@
+     commit_message: str | None = None,
+     remote_name: str = "origin",
+ ) -> bool:
+-    """Commit and push only the current simulation folder.
+-
+-    Parameters
+-    ----------
+-    project_folder:
+-        Folder containing main.py. Usually pass HERE from main.py.
+-
+-    commit_message:
+-        Optional custom Git commit message. When omitted, a timestamped
+-        simulation-update message is generated automatically.
+-
+-    remote_name:
+-        Git remote to push. The normal cloned-repository value is origin.
+-
+-    Returns
+-    -------
+-    bool
+-        True when a new commit was pushed.
+-        False when there were no changes to commit.
++    """Commit, push, and verify only the current simulation folder.
++
++    A previous interrupted run may already have created a local commit.
++    Therefore, this function still performs the pull/push/verification
++    steps when there are no new files to commit.
+     """
+ 
+     project_folder = Path(
+@@ -227,7 +357,6 @@
+         else relative_project.as_posix()
+     )
+ 
+-    # Make sure the cloned repository has a usable remote.
+     remote_result = _run_git(
+         ["remote", "get-url", remote_name],
+         repository_root,
+@@ -241,8 +370,21 @@
+             "creating an unrelated local folder."
+         )
+ 
+-    # Protect unrelated staged files. The helper pushes only this
+-    # simulation folder, not other work in the repository.
++    remote_url = remote_result.stdout.strip()
++    _check_repository_target(remote_url)
++
++    branch = _current_branch(
++        repository_root
++    )
++
++    print("\nGitHub target verified.")
++    print("Repository:", EXPECTED_REPOSITORY)
++    print("Remote:", remote_url)
++    print("Branch:", branch)
++    print("Local repository:", repository_root)
++    print("Simulation folder:", project_scope)
++
++    # Do not mix unrelated staged work into this simulation commit.
+     staged_before_result = _run_git(
+         ["diff", "--cached", "--name-only"],
+         repository_root,
+@@ -276,7 +418,7 @@
+             "by this helper."
+         )
+ 
+-    # Stage only this simulation directory.
++    # Stage only this simulation folder.
+     _run_git(
+         [
+             "add",
+@@ -287,80 +429,68 @@
+         repository_root,
+     )
+ 
+-    staged_result = _run_git(
++    staged_names_result = _run_git(
+         [
+             "diff",
+             "--cached",
+-            "--quiet",
++            "--name-only",
+             "--",
+             project_scope,
+         ],
+         repository_root,
+-        check=False,
+-    )
+-
+-    if staged_result.returncode == 0:
++    )
++
++    staged_names = [
++        line.strip()
++        for line in staged_names_result.stdout.splitlines()
++        if line.strip()
++    ]
++
++    if staged_names:
+         print(
+-            "\nGitHub: no changed simulation files to commit."
+-        )
+-        return False
+-
+-    if staged_result.returncode != 1:
+-        raise GitPushError(
+-            "Git could not check the staged simulation changes."
+-        )
+-
+-    if commit_message is None:
+-        timestamp = datetime.now().astimezone().strftime(
+-            "%Y-%m-%d %H:%M:%S %Z"
+-        )
+-
+-        commit_message = (
+-            f"Update {project_folder.name} simulation - "
+-            f"{timestamp}"
+-        )
+-
+-    _run_git(
+-        [
+-            "commit",
+-            "-m",
+-            commit_message,
+-        ],
+-        repository_root,
+-    )
+-
+-    branch_result = _run_git(
+-        ["branch", "--show-current"],
+-        repository_root,
+-    )
+-
+-    branch = branch_result.stdout.strip()
+-
+-    if not branch:
+-        raise GitPushError(
+-            "Git is in a detached-HEAD state. Check out the main branch "
+-            "before running the simulation."
+-        )
+-
+-    # Rebase the new local commit on any changes already pushed from
+-    # another computer. This keeps the history clean.
+-    remote_branch_result = _run_git(
+-        [
+-            "ls-remote",
+-            "--exit-code",
+-            "--heads",
+-            remote_name,
+-            branch,
+-        ],
+-        repository_root,
+-        check=False,
+-    )
+-
+-    if remote_branch_result.returncode == 0:
++            f"Staged {len(staged_names)} changed simulation file(s)."
++        )
++
++        if commit_message is None:
++            timestamp = datetime.now().astimezone().strftime(
++                "%Y-%m-%d %H:%M:%S %Z"
++            )
++
++            commit_message = (
++                f"Update {project_folder.name} simulation - "
++                f"{timestamp}"
++            )
++
++        _run_git(
++            [
++                "commit",
++                "-m",
++                commit_message,
++            ],
++            repository_root,
++        )
++
++        print("Created a new local simulation commit.")
++    else:
++        print(
++            "No new simulation files require a commit."
++        )
++        print(
++            "Continuing to push and verify any earlier local commit."
++        )
++
++    # Protect tracked, unstaged work elsewhere in the repository.
++    # Git restores that work after the rebase.
++    if _remote_branch_exists(
++        repository_root,
++        remote_name,
++        branch,
++    ):
+         _run_git(
+             [
+                 "pull",
+                 "--rebase",
++                "--autostash",
+                 remote_name,
+                 branch,
+             ],
+@@ -377,17 +507,16 @@
+         repository_root,
+     )
+ 
+-    commit_sha = _run_git(
+-        ["rev-parse", "--short", "HEAD"],
+-        repository_root,
+-    ).stdout.strip()
+-
+-    remote_url = remote_result.stdout.strip()
+-
+-    print("\nGitHub push completed.")
+-    print("Repository:", remote_url)
++    verified_sha = _verify_remote_commit(
++        repository_root,
++        remote_name,
++        branch,
++    )
++
++    print("\nGitHub push completed and remotely verified.")
++    print("Repository:", EXPECTED_REPOSITORY)
+     print("Branch:", branch)
+-    print("Commit:", commit_sha)
++    print("Verified commit:", verified_sha[:12])
+     print("Simulation folder:", project_scope)
+ 
+     return True

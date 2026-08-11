@@ -1,0 +1,40 @@
+EXACT CHANGE AUDIT
+==================
+
+Source:
+    User-uploaded Final.zip
+
+Existing files modified:
+    - github_push.py: MODIFIED
+
+New files added:
+    - push_now.py
+    - github_push_exact_changes.patch
+    - GITHUB_PUSH_CHANGE_AUDIT.txt
+
+Files removed:
+    None
+
+main.py verification:
+    Original SHA-256: e4f7bc15b16311d0dd4452aaccb8203522c6c9b29dac60008451d605ac354aab
+    Modified SHA-256: e4f7bc15b16311d0dd4452aaccb8203522c6c9b29dac60008451d605ac354aab
+    Byte-for-byte identical: True
+
+Unchanged existing files:
+    51 existing file(s) are byte-for-byte identical.
+
+What changed inside github_push.py:
+    1. Verifies that origin points to hzolfaghari2022/LSTM_Modelling.
+    2. Does not stop when a previous run already created an unpushed commit.
+    3. Uses git pull --rebase --autostash to protect unrelated tracked edits.
+    4. Pushes the current branch.
+    5. Compares local HEAD with the GitHub remote branch after pushing.
+    6. Prints a clear success message only after remote verification.
+
+What push_now.py does:
+    It calls github_push.py directly, so the existing code and results can
+    be pushed without running 20 training epochs again.
+
+The neural-network architecture, data processing, optimizer, loss,
+training, fine-tuning, prediction, metrics, figures, and main.py were
+not changed.

@@ -1,0 +1,25 @@
+CHANGES FROM THE MY PLANT VERSION
+=================================
+
+UNCHANGED
+---------
+- features: I, delta_I, I_DC
+- hidden sizes: 32, 64, 64
+- one final Linear layer
+- two outputs
+- Adam optimizer
+- training-only normalization
+- complete 147 mA final test
+
+TARGETED CHANGES
+----------------
+- anti-aliased downsampling: 2000 Hz -> 500 Hz
+- 120 samples now cover 0.24 s instead of 0.06 s
+- dropout: 0.30 -> 0.10
+- validation learning-rate scheduler
+- validation early stopping
+- moderate displacement-peak weighting
+- batched prediction
+- automatic plotting from main.py
+- measured: green solid
+- predicted: orange dashed

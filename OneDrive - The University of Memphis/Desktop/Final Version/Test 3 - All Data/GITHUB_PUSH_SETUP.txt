@@ -1,0 +1,129 @@
+GITHUB AUTO-PUSH ADD-ON
+=======================
+
+PURPOSE
+-------
+After main.py successfully finishes the simulation, saves the numerical
+results, and creates the figures, it calls github_push.py.
+
+github_push.py then:
+1. Finds the cloned Git repository containing the simulation folder.
+2. Stages only the current simulation folder.
+3. Creates a timestamped commit.
+4. Pulls remote changes with rebase when necessary.
+5. Pushes the current branch to origin.
+
+It does not alter the simulation, model, training, data processing,
+metrics, or plots.
+
+
+ONE-TIME REPOSITORY SETUP
+-------------------------
+Choose ONE clone command.
+
+GitHub CLI:
+
+    cd "C:\Users\hzlfghri\OneDrive - The University of Memphis\Desktop\Test"
+    gh repo clone hzolfaghari2022/LSTM_Modelling
+
+OR SSH:
+
+    cd "C:\Users\hzlfghri\OneDrive - The University of Memphis\Desktop\Test"
+    git clone git@github.com:hzolfaghari2022/LSTM_Modelling.git
+
+Do not run both commands.
+
+Then place the complete simulation folder inside the cloned repository.
+For example:
+
+    LSTM_Modelling
+    └── FARNN_COMSOL
+        ├── main.py
+        ├── github_push.py
+        ├── model.py
+        ├── data_utils.py
+        ├── train_utils.py
+        ├── plot_results.py
+        ├── ResultsData
+        └── FiguresResults
+
+
+FILES TO ADD BESIDE main.py
+---------------------------
+Copy these files beside main.py:
+
+    github_push.py
+    .gitignore
+
+
+THE ONLY TWO CHANGES TO main.py
+-------------------------------
+
+CHANGE 1 — add this import with the other local imports:
+
+    from github_push import GitPushError, push_simulation
+
+
+CHANGE 2 — add this block after figures have been created:
+
+    # -----------------------------------------------------------------
+    # 9. PUSH THIS COMPLETED SIMULATION TO GITHUB
+    # -----------------------------------------------------------------
+
+    try:
+        push_simulation(HERE)
+    except GitPushError as error:
+        print("\nSimulation completed, but the GitHub push failed:")
+        print(error)
+
+The best location in the supplied FARNN main.py is immediately after:
+
+    print("Figures saved in:", HERE / "FiguresResults")
+
+and before:
+
+    if os.name == "nt":
+
+
+FIRST TEST
+----------
+Open PowerShell in the simulation folder inside LSTM_Modelling:
+
+    conda activate lstm-py312
+    python main.py
+
+At the end, the terminal should print:
+
+    GitHub push completed.
+    Repository: ...
+    Branch: main
+    Commit: ...
+
+
+GIT IDENTITY
+------------
+If Git says your identity is unknown, run these once:
+
+    git config --global user.name "Your Name"
+    git config --global user.email "YOUR_GITHUB_EMAIL"
+
+Use the email associated with your GitHub account, or your GitHub
+noreply email.
+
+
+AUTHENTICATION
+--------------
+No password, access token, or SSH private key is written in the Python
+code. Authentication is handled by the Git/SSH or GitHub CLI setup on
+your computer.
+
+
+USING IT IN ANOTHER SIMULATION
+------------------------------
+1. Put the other simulation folder inside a cloned Git repository.
+2. Copy github_push.py and .gitignore beside its main.py.
+3. Add the same import.
+4. Add the same try/except block after that simulation has saved all
+   outputs.
+
+The helper stages only the folder passed to push_simulation(...).
