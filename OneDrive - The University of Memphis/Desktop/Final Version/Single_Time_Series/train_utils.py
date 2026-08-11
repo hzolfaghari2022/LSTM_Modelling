@@ -239,11 +239,10 @@ def train_model(model, data, device):
 
 
 def fine_tune_on_all_development_data(model, data, device):
-    """Use this record's training + validation windows for final updates.
+    """Use training + validation windows for final low-rate updates.
 
     Validation has already selected the model and hyperparameters.
-    This step lets the selected model use validation blocks only after
-    model selection; the distributed test blocks remain untouched.
+    Test tensors are not included in this final fitting step.
     """
 
     all_inputs = torch.cat(

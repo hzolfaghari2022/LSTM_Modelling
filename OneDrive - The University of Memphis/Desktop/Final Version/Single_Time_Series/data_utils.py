@@ -145,6 +145,44 @@ def windows_from_blocks(
     )
 
 
+def full_record_windows(
+    experiment,
+    input_mean,
+    input_std,
+    output_mean,
+    output_std,
+):
+    """Create dense prediction windows over one complete record."""
+
+    time, current, outputs = experiment
+    features_n = (make_features(current) - input_mean) / input_std
+    outputs_n = (outputs - output_mean) / output_std
+
+    inputs = []
+    targets = []
+    target_time = []
+
+    for target_index in range(
+        SEQUENCE_LENGTH - 1,
+        len(current),
+        TEST_STRIDE,
+    ):
+        inputs.append(
+            features_n[
+                target_index - SEQUENCE_LENGTH + 1:
+                target_index + 1
+            ]
+        )
+        targets.append(outputs_n[target_index])
+        target_time.append(time[target_index])
+
+    return (
+        torch.tensor(np.asarray(inputs), dtype=torch.float32),
+        torch.tensor(np.asarray(targets), dtype=torch.float32),
+        np.asarray(target_time, dtype=np.float32),
+    )
+
+
 def prepare_data(folder: Path):
     if SINGLE_SERIES_SHEET not in AVAILABLE_SHEETS:
         raise ValueError(
@@ -211,6 +249,13 @@ def prepare_data(folder: Path):
         output_mean,
         output_std,
     )
+    x_all, y_all, all_time = full_record_windows(
+        experiment,
+        input_mean,
+        input_std,
+        output_mean,
+        output_std,
+    )
 
     return {
         "workbook": workbook,
@@ -225,6 +270,9 @@ def prepare_data(folder: Path):
         "x_test": x_test,
         "y_test": y_test,
         "test_time": test_time,
+        "x_all": x_all,
+        "y_all": y_all,
+        "all_time": all_time,
         "input_mean": input_mean,
         "input_std": input_std,
         "output_mean": output_mean,

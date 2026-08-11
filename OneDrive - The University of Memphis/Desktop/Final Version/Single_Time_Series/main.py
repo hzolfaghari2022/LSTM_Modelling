@@ -75,53 +75,107 @@ fine_tune_history = fine_tune_on_all_development_data(
 
 
 # ---------------------------------------------------------------------
-# 3. DISTRIBUTED TEST BLOCKS FROM THE SAME RECORD
+# 3. HELD-OUT TEST AND COMPLETE-RECORD PREDICTIONS
 # ---------------------------------------------------------------------
 
-prediction_n = predict(model, data["x_test"], device)
-prediction = prediction_n * data["output_std"] + data["output_mean"]
-measured = data["y_test"].numpy() * data["output_std"] + data["output_mean"]
+def evaluate(x, y):
+    """Use the same prediction path for any prepared set of windows."""
+
+    prediction_n = predict(model, x, device)
+    prediction = prediction_n * data["output_std"] + data["output_mean"]
+    measured = y.numpy() * data["output_std"] + data["output_mean"]
+    return measured, prediction
+
+
+test_measured, test_prediction = evaluate(
+    data["x_test"],
+    data["y_test"],
+)
+all_measured, all_prediction = evaluate(
+    data["x_all"],
+    data["y_all"],
+)
+raw_time, _, raw_measured = data["experiment"]
+
+evaluation_sets = [
+    (
+        "Distributed held-out test blocks",
+        test_measured,
+        test_prediction,
+    ),
+    (
+        "Complete selected record (descriptive)",
+        all_measured,
+        all_prediction,
+    ),
+]
 
 metric_rows = []
-for output_index, output_name, unit in [
-    (0, "Displacement", "mm"),
-    (1, "Lorentz force", "N"),
-]:
-    row = {
-        "Series": SINGLE_SERIES_SHEET,
-        "Output": output_name,
-        "Unit": unit,
-    }
-    row.update(
-        calculate_metrics(
-            measured[:, output_index],
-            prediction[:, output_index],
+for evaluation_name, measured, prediction in evaluation_sets:
+    for output_index, output_name, unit in [
+        (0, "Displacement", "mm"),
+        (1, "Lorentz force", "N"),
+    ]:
+        row = {
+            "Evaluation": evaluation_name,
+            "Series": SINGLE_SERIES_SHEET,
+            "Output": output_name,
+            "Unit": unit,
+        }
+        row.update(
+            calculate_metrics(
+                measured[:, output_index],
+                prediction[:, output_index],
+            )
         )
-    )
-    metric_rows.append(row)
+        metric_rows.append(row)
 
 metrics = pd.DataFrame(metric_rows)
-print("\nDistributed one-series test metrics:")
+print("\nHeld-out test and complete-record metrics:")
 print(metrics.to_string(index=False))
+print(
+    "\nTrustworthiness must be judged from the held-out test rows. "
+    "Complete-record rows include fitted regions and are descriptive."
+)
 metrics.to_csv(RESULTS_FOLDER / "metrics.csv", index=False)
 
-pd.DataFrame(
-    {
-        "time_s": data["test_time"],
-        "measured_displacement_mm": measured[:, 0],
-        "predicted_displacement_mm": prediction[:, 0],
-        "displacement_error_mm": measured[:, 0] - prediction[:, 0],
-        "measured_force_N": measured[:, 1],
-        "predicted_force_N": prediction[:, 1],
-        "force_error_N": measured[:, 1] - prediction[:, 1],
-    }
-).to_csv(RESULTS_FOLDER / "test_predictions.csv", index=False)
+def save_predictions(file_name, time, measured, prediction):
+    pd.DataFrame(
+        {
+            "time_s": time,
+            "measured_displacement_mm": measured[:, 0],
+            "predicted_displacement_mm": prediction[:, 0],
+            "displacement_error_mm": measured[:, 0] - prediction[:, 0],
+            "measured_force_N": measured[:, 1],
+            "predicted_force_N": prediction[:, 1],
+            "force_error_N": measured[:, 1] - prediction[:, 1],
+        }
+    ).to_csv(RESULTS_FOLDER / file_name, index=False)
+
+
+save_predictions(
+    "test_predictions.csv",
+    data["test_time"],
+    test_measured,
+    test_prediction,
+)
+save_predictions(
+    "full_record_predictions.csv",
+    data["all_time"],
+    all_measured,
+    all_prediction,
+)
 
 np.savez_compressed(
     RESULTS_FOLDER / "simulation_results.npz",
     test_time=data["test_time"],
-    measured=measured,
-    prediction=prediction,
+    test_measured=test_measured,
+    test_prediction=test_prediction,
+    all_time=data["all_time"],
+    all_measured=all_measured,
+    all_prediction=all_prediction,
+    raw_time=raw_time,
+    raw_measured=raw_measured,
     training_history=training_history,
     validation_history=validation_history,
     best_epoch=np.asarray(best_epoch),

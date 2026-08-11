@@ -44,6 +44,20 @@ python main.py
 The model, split table, metrics, and predictions are saved in
 `ResultsData`; figures are saved in `FiguresResults`.
 
+The simulation now produces two different kinds of prediction evidence:
+
+1. `03_full_record_prediction_all_outputs.png` shows measured and predicted
+   displacement and force over the complete selected record.  The shaded
+   first 120 samples are the history required before the LSTM can make its
+   first prediction.
+2. The held-out test figures and metrics use only test blocks that were not
+   used for training, validation, normalization, or fine-tuning.  These
+   held-out results are the correct evidence of generalization.
+
+`full_record_predictions.csv` contains every complete-record prediction
+after the initial history window.  `test_predictions.csv` contains only the
+independent distributed test blocks.
+
 The default maximum is 60 epochs, with validation early stopping.  On the
 included 127 mA record and seed 123, the verified run stopped after epoch
 50 and restored epoch 38.
