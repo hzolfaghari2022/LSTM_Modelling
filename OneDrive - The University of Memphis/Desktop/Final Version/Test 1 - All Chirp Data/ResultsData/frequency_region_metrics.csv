@@ -1,0 +1,7 @@
+Region,Output,Unit,RMSE,R2
+Beginning / lower frequency,Displacement,mm,0.11503829061985016,0.9371010661125183
+Beginning / lower frequency,Lorentz force,N,0.0019275208469480276,0.6621978878974915
+Middle / medium frequency,Displacement,mm,0.14910398423671722,0.8877066373825073
+Middle / medium frequency,Lorentz force,N,0.002356654964387417,0.9422519207000732
+End / higher frequency,Displacement,mm,0.03621674329042435,0.6199301481246948
+End / higher frequency,Lorentz force,N,0.0019384449115023017,0.9198791980743408
