@@ -1,0 +1,13 @@
+# NumPy supplies numerical arrays and metric calculations.
+numpy
+# pandas reads Excel/CSV data and creates result tables.
+pandas
+# SciPy supplies anti-aliased polyphase resampling.
+scipy
+# Matplotlib creates and saves the result figures.
+matplotlib
+# openpyxl lets pandas read the .xlsx workbook format.
+openpyxl
+# PyTorch supplies tensors, LSTM layers, and optimization.
+torch
+# Packages required to run the simulation and create figures
