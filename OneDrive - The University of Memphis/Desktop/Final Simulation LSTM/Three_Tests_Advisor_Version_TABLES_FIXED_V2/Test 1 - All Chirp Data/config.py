@@ -1,0 +1,109 @@
+import os
+
+
+TRAIN_ONLY_SHEETS = [
+
+    "DC_Offset_67mA",
+
+    "DC_Offset_87mA",
+
+    "DC_Offset_107mA",
+
+]
+
+
+MIXED_SHEET = "DC_Offset_127mA"
+
+
+FINAL_TEST_SHEET = "DC_Offset_147mA"
+
+
+BLOCK_SIZE = 250
+
+
+SPLIT_PATTERN = (
+
+    "training",
+
+    "validation",
+
+    "training",
+
+    "test",
+
+    "training",
+
+)
+
+
+DOWNSAMPLE_FACTOR = 4
+
+
+SEQUENCE_LENGTH = 120
+
+
+TRAIN_STRIDE = 2
+
+VALIDATION_STRIDE = 1
+
+TEST_STRIDE = 1
+
+
+INPUT_FEATURES = 3
+
+HIDDEN_1 = 32
+
+
+HIDDEN_2 = 64
+
+
+HIDDEN_3 = 64
+
+OUTPUTS = 2
+
+
+DROPOUT = 0.10
+
+
+BATCH_SIZE = 128
+
+LEARNING_RATE = 1e-3
+
+
+WEIGHT_DECAY = 1e-6
+
+
+EPOCHS = int(os.environ.get("DLSTM_EPOCHS", "20"))
+
+
+EARLY_STOPPING_PATIENCE = 12
+
+
+SCHEDULER_PATIENCE = 6
+
+SCHEDULER_FACTOR = 0.5
+
+
+MIN_LEARNING_RATE = 1e-5
+
+MINIMUM_IMPROVEMENT = 1e-5
+
+
+DISPLACEMENT_LOSS_WEIGHT = 0.50
+
+FORCE_LOSS_WEIGHT = 0.50
+
+
+DISPLACEMENT_PEAK_WEIGHT = 0.35
+
+
+SEED = 123
+
+
+CPU_THREADS = min(8, os.cpu_count() or 4)
+
+
+FINAL_FINE_TUNE_EPOCHS = 4
+
+
+FINAL_FINE_TUNE_LEARNING_RATE = 1e-4
