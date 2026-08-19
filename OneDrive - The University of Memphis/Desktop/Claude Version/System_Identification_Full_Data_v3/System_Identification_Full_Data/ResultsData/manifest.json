@@ -1,0 +1,141 @@
+{
+  "evaluations": [
+    {
+      "name": "Load2_DCChirp_67mA_31Hz_7s",
+      "kind": "internal_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load2_DCChirp_87mA_31Hz_7s",
+      "kind": "internal_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load2_DCChirp_107mA_31Hz_7s",
+      "kind": "internal_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load2_DCChirp_127mA_31Hz_7s",
+      "kind": "internal_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load2_DCChirp_107mA_51Hz_11s",
+      "kind": "internal_test",
+      "has_reference": true
+    },
+    {
+      "name": "ALL_internal_test_blocks",
+      "kind": "internal_test_pooled",
+      "has_reference": true
+    },
+    {
+      "name": "Load3_DCSine_200mA_1.6s",
+      "kind": "pure_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load3_Step_200mA_1.6s",
+      "kind": "pure_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load3_Sine_200mA_1.6s",
+      "kind": "pure_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load3_ZeroInput_1.6s",
+      "kind": "pure_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load2_DCChirp_147mA_31Hz_7s",
+      "kind": "pure_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load2_Step_150mA_0.8s",
+      "kind": "pure_test",
+      "has_reference": true
+    },
+    {
+      "name": "Load2_ZeroInput_0.8s",
+      "kind": "pure_test",
+      "has_reference": true
+    },
+    {
+      "name": "Synthetic_Step_0.15A_Load1.906g",
+      "kind": "synthetic_probe",
+      "has_reference": false
+    },
+    {
+      "name": "Synthetic_ZeroInput_Load1.906g",
+      "kind": "synthetic_probe",
+      "has_reference": false
+    },
+    {
+      "name": "Synthetic_Step_0.15A_Load3.813g",
+      "kind": "synthetic_probe",
+      "has_reference": false
+    },
+    {
+      "name": "Synthetic_ZeroInput_Load3.813g",
+      "kind": "synthetic_probe",
+      "has_reference": false
+    },
+    {
+      "name": "Synthetic_Step_0.15A_Load7.625g",
+      "kind": "synthetic_probe",
+      "has_reference": false
+    },
+    {
+      "name": "Synthetic_ZeroInput_Load7.625g",
+      "kind": "synthetic_probe",
+      "has_reference": false
+    }
+  ],
+  "pure_test_records": [
+    "Load3_DCSine_200mA_1.6s",
+    "Load3_Step_200mA_1.6s",
+    "Load3_Sine_200mA_1.6s",
+    "Load3_ZeroInput_1.6s",
+    "Load2_DCChirp_147mA_31Hz_7s",
+    "Load2_Step_150mA_0.8s",
+    "Load2_ZeroInput_0.8s"
+  ],
+  "development_records": [
+    "Load2_DCChirp_67mA_31Hz_7s",
+    "Load2_DCChirp_87mA_31Hz_7s",
+    "Load2_DCChirp_107mA_31Hz_7s",
+    "Load2_DCChirp_127mA_31Hz_7s",
+    "Load2_DCChirp_107mA_51Hz_11s",
+    "Load1_DCSine_120mA_0.8s",
+    "Load1_Step_120mA_0.8s",
+    "Load1_Sine_120mA_0.8s",
+    "Load1_ZeroInput_0.793s",
+    "Load2_DCSine_150mA_0.8s",
+    "Load2_Sine_150mA_0.8s"
+  ],
+  "extra_step_records": [
+    "Load3_Step_200mA_1.6s",
+    "Load2_Step_150mA_0.8s"
+  ],
+  "extra_zero_input_records": [
+    "Load3_ZeroInput_1.6s",
+    "Load2_ZeroInput_0.8s"
+  ],
+  "duplicate_groups": [
+    [
+      "Load2_DCChirp_107mA_51Hz_11s",
+      "Load2_DCChirp_107mA_51Hz_11s_copy1"
+    ]
+  ],
+  "dropped_duplicates": [
+    "Load2_DCChirp_107mA_51Hz_11s_copy1"
+  ],
+  "sequence_length": 200,
+  "sample_rate_hz": 1000.0,
+  "best_epoch": 29
+}

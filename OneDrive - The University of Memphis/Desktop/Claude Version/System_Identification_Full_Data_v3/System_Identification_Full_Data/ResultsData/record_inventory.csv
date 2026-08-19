@@ -1,0 +1,19 @@
+record,sheet,first_column,family,load_mass_g,total_mass_g,mass_ratio,native_rate_hz,duration_s,samples_at_target_rate,usage,description
+Load2_DCChirp_67mA_31Hz_7s,DC_Offset_67mA,0,dc_plus_chirp,3.813,5.24,1.0,2000.0,7.0,7001,development,"Coil Current=DC Offset+ Delayed Chirp. Start Freq=1 Hz, Stop Freq=31 Hz. Simulation Duration=7 s. Chirp Current amplitude =0.02 A, DC Offset=0.067A. Chirp is delayed by 1 second"
+Load2_DCChirp_87mA_31Hz_7s,DC_Offset_87mA,0,dc_plus_chirp,3.813,5.24,1.0,2000.0,7.0,7001,development,"Coil Current=DC Offset+ Delayed Chirp. Start Freq=1 Hz, Stop Freq=31 Hz. Simulation Duration=7 s. Chirp Current amplitude =0.02 A, DC Offset=0.087A. Chirp is delayed by 1 second"
+Load2_DCChirp_107mA_31Hz_7s,DC_Offset_107mA,0,dc_plus_chirp,3.813,5.24,1.0,2000.0,7.0,7001,development,"Coil Current=DC Offset+ Delayed Chirp. Start Freq=1 Hz, Stop Freq=31 Hz. Simulation Duration=7 s. Chirp Current amplitude =0.02 A, DC Offset=0.107A. Chirp is delayed by 1 second"
+Load2_DCChirp_127mA_31Hz_7s,DC_Offset_127mA,0,dc_plus_chirp,3.813,5.24,1.0,2000.0,7.0,7001,development,"Coil Current=DC Offset+ Delayed Chirp. Start Freq=1 Hz, Stop Freq=31 Hz. Simulation Duration=7 s. Chirp Current amplitude =0.02 A, DC Offset=0.127A. Chirp is delayed by 1 second"
+Load2_DCChirp_147mA_31Hz_7s,DC_Offset_147mA,0,dc_plus_chirp,3.813,5.24,1.0,2000.0,7.0,7001,pure_test,"Coil Current=DC Offset+ Delayed Chirp. Start Freq=1 Hz, Stop Freq=31 Hz. Simulation Duration=7 s. Chirp Current amplitude =0.02 A, DC Offset=0.147A. Chirp is delayed by 1 second"
+Load2_DCChirp_107mA_51Hz_11s,Sheet1,0,dc_plus_chirp,3.813,5.24,1.0,500.0,11.0,11001,development,"Coil Current=DC Offset+ Delayed Chirp. Start Freq=1 Hz, Stop Freq=51 Hz. Simulation Duration=11 s. Chirp Current amplitude =0.03 A, DC Offset=0.107A. Chirp is delayed by 1 second"
+Load1_DCSine_120mA_0.8s,Sheet3,0,dc_plus_sine,1.906,3.333,0.63607,2000.0,0.8,801,development,"Case 1: Coil Current= DC_Offset+Sine. DC_Offset=0.12A, Sine Amplitude=0.12A"
+Load1_Step_120mA_0.8s,Sheet3,5,step,1.906,3.333,0.63607,2000.0,0.8,801,development,Case 2: Coil Current= DC_Offset only. DC_Offset=0.12A
+Load1_Sine_120mA_0.8s,Sheet3,10,sine,1.906,3.333,0.63607,2000.0,0.8,801,development,Case 3: Coil Current=Sine only. Sine Amplitude=0.12A
+Load1_ZeroInput_0.793s,Sheet3,15,zero_input,1.906,3.333,0.63607,2000.0,0.793,794,development,Case 4: No Current
+Load2_DCSine_150mA_0.8s,Sheet4,0,dc_plus_sine,3.813,5.24,1.0,2000.0,0.8,801,development,"Case 1: Coil Current= DC_Offset+Sine. DC_Offset=0.15A, Sine Amplitude=0.15A"
+Load2_Step_150mA_0.8s,Sheet4,5,step,3.813,5.24,1.0,2000.0,0.8,801,pure_test,Case 2: Coil Current= DC_Offset only. DC_Offset=0.15A
+Load2_Sine_150mA_0.8s,Sheet4,10,sine,3.813,5.24,1.0,2000.0,0.8,801,development,Case 3: Coil Current=Sine only. Sine Amplitude=0.15A
+Load2_ZeroInput_0.8s,Sheet4,15,zero_input,3.813,5.24,1.0,2000.0,0.8,801,pure_test,Case 4: No Current
+Load3_DCSine_200mA_1.6s,Sheet5,0,dc_plus_sine,7.625,9.052,1.72748,1000.0,1.6,1601,pure_test,"Case 1: Coil Current= DC_Offset+Sine. DC_Offset=0.2A, Sine Amplitude=0.2A"
+Load3_Step_200mA_1.6s,Sheet5,5,step,7.625,9.052,1.72748,1000.0,1.6,1601,pure_test,Case 2: Coil Current= DC_Offset only. DC_Offset=0.2A
+Load3_Sine_200mA_1.6s,Sheet5,10,sine,7.625,9.052,1.72748,1000.0,1.6,1601,pure_test,Case 3: Coil Current=Sine only. Sine Amplitude=0.2A
+Load3_ZeroInput_1.6s,Sheet5,15,zero_input,7.625,9.052,1.72748,1000.0,1.6,1601,pure_test,Case 4: No Current
