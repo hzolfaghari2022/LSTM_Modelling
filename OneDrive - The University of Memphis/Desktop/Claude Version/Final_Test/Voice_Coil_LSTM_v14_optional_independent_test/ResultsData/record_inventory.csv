@@ -14,6 +14,5 @@ Load2_Step_150mA_0.8s,Total_Data.xlsx,PURE_TEST_L2_Step150,0,step,3.813,5.24,1.0
 Load2_Sine_150mA_0.8s,Total_Data.xlsx,TRAIN_VAL_TEST_L2_Sine150,0,sine,3.813,5.24,1.0,2000.0,0.8,801,development,Case 3: Coil Current=Sine only. Sine Amplitude=0.15A
 Load2_ZeroInput_0.8s,Total_Data.xlsx,PURE_TEST_L2_Zero,0,zero_input,3.813,5.24,1.0,2000.0,0.8,801,pure_test,Case 4: No Current
 Load3_DCSine_200mA_1.6s,Total_Data.xlsx,PURE_TEST_L3_DCSine200,0,dc_plus_sine,7.625,9.052,1.72748,1000.0,1.6,1601,pure_test,"Case 1: Coil Current= DC_Offset+Sine. DC_Offset=0.2A, Sine Amplitude=0.2A"
-Load3_Step_200mA_1.6s,Total_Data.xlsx,PURE_TEST_L3_Step200,0,step,7.625,9.052,1.72748,1000.0,1.6,1601,pure_test,Case 2: Coil Current= DC_Offset only. DC_Offset=0.2A
 Load3_Sine_200mA_1.6s,Total_Data.xlsx,TRAIN_VAL_TEST_L3_Sine200,0,sine,7.625,9.052,1.72748,1000.0,1.6,1601,development,Case 3: Coil Current=Sine only. Sine Amplitude=0.2A
 Load3_ZeroInput_1.6s,Total_Data.xlsx,TRAIN_VAL_TEST_L3_Zero,0,zero_input,7.625,9.052,1.72748,1000.0,1.6,1601,development,Case 4: No Current
