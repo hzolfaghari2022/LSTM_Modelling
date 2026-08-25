@@ -25,6 +25,15 @@ RED = "#c62828"
 PURPLE = "#6a1b9a"
 GRAY = "#455a64"
 
+# Measured-versus-predicted comparison style.  The two curves are often
+# almost identical, so color alone is not enough to separate them.  Measured
+# data are solid black and slightly thicker.  Predictions are vivid,
+# long-dashed, drawn on top, and carry sparse white-centred markers.
+MEASURED_COLOR = "#111111"
+DISPLACEMENT_PREDICTION_COLOR = "#d81b60"
+FORCE_PREDICTION_COLOR = "#0072b2"
+PREDICTION_MARKER_COUNT = 18
+
 ROLE_COLORS = {
     "one_step_training": "#81c784",
     "one_step_validation": "#fbc02d",
@@ -58,6 +67,44 @@ def _finish(figure, folder, file_name):
     figure.savefig(folder / file_name, dpi=170, bbox_inches="tight")
     plt.close(figure)
     print("  wrote", file_name, flush=True)
+
+
+def _plot_measured_prediction(
+    axis,
+    time,
+    measured,
+    predicted,
+    prediction_color,
+    prediction_label="LSTM prediction (dashed + markers)",
+):
+    """Draw an overlapping comparison that remains readable in print."""
+    time = np.asarray(time)
+    marker_spacing = max(1, int(np.ceil(len(time) / PREDICTION_MARKER_COUNT)))
+    axis.plot(
+        time,
+        measured,
+        color=MEASURED_COLOR,
+        lw=2.15,
+        ls="-",
+        alpha=0.92,
+        label="Measured (solid black)",
+        zorder=2,
+    )
+    axis.plot(
+        time,
+        predicted,
+        color=prediction_color,
+        lw=1.65,
+        ls=(0, (7, 3)),
+        marker="o",
+        markersize=3.2,
+        markevery=marker_spacing,
+        markerfacecolor="white",
+        markeredgecolor=prediction_color,
+        markeredgewidth=0.9,
+        label=prediction_label,
+        zorder=3,
+    )
 
 
 def _evaluation_map(evaluations):
@@ -264,8 +311,18 @@ def _plot_development_grids(data, lookup, metrics, folder):
         for axis, name in zip(axes, names):
             result = _combined_development(name, lookup)
             _shade_roles(axis, name, data["split_table"])
-            axis.plot(result["time"], result["measured"][:, column], color=GRAY, lw=1.45, label="measured")
-            axis.plot(result["time"], result["predicted"][:, column], color=color, lw=0.95, ls="--", label="prediction")
+            prediction_color = (
+                DISPLACEMENT_PREDICTION_COLOR
+                if column == 0
+                else FORCE_PREDICTION_COLOR
+            )
+            _plot_measured_prediction(
+                axis,
+                result["time"],
+                result["measured"][:, column],
+                result["predicted"][:, column],
+                prediction_color,
+            )
             role_fits = [
                 _metric(metrics, name, kind, label, "Fit_percent")
                 for kind in (
@@ -309,8 +366,19 @@ def _plot_pure_details(data, records_by_name, lookup, metrics, folder):
             start=1,
         ):
             axis = axes[axis_index]
-            axis.plot(result["time"], result["measured"][:, column], color=GRAY, lw=1.8, label="measured")
-            axis.plot(result["time"], result["predicted"][:, column], color=color, lw=1.05, ls="--", label="one-step prediction")
+            prediction_color = (
+                DISPLACEMENT_PREDICTION_COLOR
+                if column == 0
+                else FORCE_PREDICTION_COLOR
+            )
+            _plot_measured_prediction(
+                axis,
+                result["time"],
+                result["measured"][:, column],
+                result["predicted"][:, column],
+                prediction_color,
+                prediction_label="One-step LSTM prediction (dashed + markers)",
+            )
             fit = _metric(metrics, name, "one_step_pure_test", label, "Fit_percent")
             rmse = _metric(metrics, name, "one_step_pure_test", label, "RMSE")
             axis.set_ylabel(f"{label} [{unit}]")
@@ -422,8 +490,18 @@ def _plot_family(data, records_by_name, lookup, metrics, family, number, folder)
         result = lookup[(name, "one_step_pure_test")]
         for row, (column, output, unit, color) in enumerate(((0, "Displacement", "mm", BLUE), (1, "Lorentz force", "N", GREEN))):
             axis = axes[row, position]
-            axis.plot(result["time"], result["measured"][:, column], color=GRAY, lw=1.8, label="measured")
-            axis.plot(result["time"], result["predicted"][:, column], color=color, lw=1.05, ls="--", label="prediction")
+            prediction_color = (
+                DISPLACEMENT_PREDICTION_COLOR
+                if column == 0
+                else FORCE_PREDICTION_COLOR
+            )
+            _plot_measured_prediction(
+                axis,
+                result["time"],
+                result["measured"][:, column],
+                result["predicted"][:, column],
+                prediction_color,
+            )
             fit = _metric(metrics, name, "one_step_pure_test", output, "Fit_percent")
             axis.set_title(f"{name}\n{output}, fit {_value(fit, 2)}%", fontsize=10)
             axis.set_xlabel("time [s]")
@@ -451,8 +529,18 @@ def _plot_chirp(data, records_by_name, lookup, folder):
     zoom = (time >= middle - 0.5) & (time <= middle + 0.5)
     figure, axes = plt.subplots(2, 2, figsize=(14, 8))
     for column, label, unit, color in ((0, "Displacement", "mm", BLUE), (1, "Lorentz force", "N", GREEN)):
-        axes[0, column].plot(time[zoom], result["measured"][zoom, column], color=GRAY, lw=1.7, label="measured")
-        axes[0, column].plot(time[zoom], result["predicted"][zoom, column], color=color, lw=1.0, ls="--", label="prediction")
+        prediction_color = (
+            DISPLACEMENT_PREDICTION_COLOR
+            if column == 0
+            else FORCE_PREDICTION_COLOR
+        )
+        _plot_measured_prediction(
+            axes[0, column],
+            time[zoom],
+            result["measured"][zoom, column],
+            result["predicted"][zoom, column],
+            prediction_color,
+        )
         axes[0, column].set_title(f"{label}: one-second mid-chirp zoom")
         axes[0, column].set_xlabel("time [s]")
         axes[0, column].set_ylabel(f"{label} [{unit}]")
@@ -461,8 +549,8 @@ def _plot_chirp(data, records_by_name, lookup, folder):
         window = np.hanning(len(time))
         frequencies = np.fft.rfftfreq(len(time), d=step)
         for signal, line_color, style, line_label in (
-            (result["measured"][:, column], GRAY, "-", "measured"),
-            (result["predicted"][:, column], color, "--", "prediction"),
+            (result["measured"][:, column], MEASURED_COLOR, "-", "Measured (solid black)"),
+            (result["predicted"][:, column], prediction_color, (0, (7, 3)), "LSTM prediction (dashed)"),
         ):
             spectrum = np.abs(np.fft.rfft((signal - signal.mean()) * window))
             axes[1, column].semilogy(frequencies, spectrum * 2.0 / np.sum(window) + 1e-12, color=line_color, ls=style, lw=1.1, label=line_label)
@@ -626,14 +714,18 @@ def _plot_explicit_zero_input_test(
         start=1,
     ):
         axis = axes[axis_index]
-        axis.plot(time, measured[:, column], color=GRAY, lw=1.9, label="measured")
-        axis.plot(
+        prediction_color = (
+            DISPLACEMENT_PREDICTION_COLOR
+            if column == 0
+            else FORCE_PREDICTION_COLOR
+        )
+        _plot_measured_prediction(
+            axis,
             time,
+            measured[:, column],
             predicted[:, column],
-            color=color,
-            lw=1.1,
-            ls="--",
-            label="one-step prediction",
+            prediction_color,
+            prediction_label="One-step LSTM prediction (dashed + markers)",
         )
         fit = _metric(
             metrics, name, "one_step_pure_test", output, "Fit_percent"

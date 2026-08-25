@@ -5,11 +5,11 @@ Everything that describes the experiment lives here: which COMSOL records
 exist, which of them are allowed to be used for training, which ones are
 locked away as pure test data, and every hyperparameter of the network.
 
-The workbook Total_Data.xlsx stores each simulated case as a block of four
-columns (Time, Displacement, Coil Current, Lorentz force). Some sheets hold
-a single case in columns A:D, other sheets hold four cases side by side in
-columns A:D, F:I, K:N and P:S. The record library below encodes that layout
-explicitly so that no data is left behind.
+The workbook Total_Data.xlsx stores each experiment on its own worksheet as
+four columns (Time, Displacement, Coil Current, Lorentz force). Worksheet
+names expose the intended human-readable role, while automatic discovery
+continues to use the metadata and column headers so that no data is left
+behind.
 """
 
 import os

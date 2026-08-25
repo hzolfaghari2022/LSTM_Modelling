@@ -12,6 +12,25 @@ Only that file supplies development, training, validation, internal-test, and
 the original built-in pure-test records. Files such as `Total_Data(1).xlsx`
 are deliberately ignored.
 
+### Worksheet names and data roles
+
+`Total_Data.xlsx` now places exactly one experiment in each worksheet. The
+worksheet-name prefix makes its role visible without changing any measured
+value:
+
+- `TRAIN_VAL_TEST_...`: a development experiment that the code divides into
+  training, validation, and internal-test time blocks;
+- `PURE_TEST_...`: a complete untouched experiment used only for final pure
+  testing;
+- `DUPLICATE_IGNORED_...`: a preserved duplicate export that the existing
+  duplicate check excludes from model development and evaluation.
+
+These prefixes are labels for the reader. The program still discovers each
+experiment from its metadata and measured columns, so renaming or reordering
+worksheets does not silently change the model logic. To add or remove a
+built-in pure-test experiment, add or remove its complete worksheet and keep
+the experiment metadata and four measured columns in the same layout.
+
 An additional workbook is optional:
 
 ```text
@@ -50,6 +69,12 @@ Do not run `model.py`; it only defines a class and therefore exits silently.
 `FiguresResults`. The model and identification procedure are unchanged; the
 plotting stage now evaluates and displays every development-data role after
 the checkpoint has been frozen:
+
+In every measured-versus-predicted time plot, the measured signal is a thick
+solid black curve. The LSTM prediction is drawn above it using a vivid color,
+long dashes, and sparse white-centred markers. This makes nearly coincident
+curves distinguishable on screen, in print, and for readers with limited
+color perception.
 
 - Figure 1: complete inventory of every development, pure-test, and optional
   independent-test record;
