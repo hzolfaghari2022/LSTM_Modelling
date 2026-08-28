@@ -119,15 +119,35 @@ print("=" * 88)
 print("Numerical results:", RESULTS_FOLDER)
 print("Measured-versus-predicted figures:", FIGURES_FOLDER)
 
-# Commit and push this completed run to the configured GitHub repository.
-# Set DLSTM_SKIP_GITHUB_PUSH=1 only when a deliberately local run is needed.
+# Commit and push this completed run to GitHub.
+# Set DLSTM_SKIP_GITHUB_PUSH=1 only for a deliberately local run.
 if os.environ.get("DLSTM_SKIP_GITHUB_PUSH", "0") != "1":
     try:
+        from datetime import datetime
         from github_push import GitPushError, push_simulation
 
-        push_simulation(HERE)
+        run_time = datetime.now().astimezone()
+
+        # Guarantees a genuine file change for every completed simulation.
+        (HERE / "last_github_update.txt").write_text(
+            (
+                "Latest completed simulation: "
+                f"{run_time.isoformat(timespec='microseconds')}\n"
+            ),
+            encoding="utf-8",
+        )
+
+        push_simulation(
+            HERE,
+            commit_message=(
+                "Update voice-coil LSTM V15 results - "
+                f"{run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+            ),
+        )
+
     except (GitPushError, ImportError) as error:
         print("\nIMPORTANT: the simulation completed, but GitHub push failed:")
         print(error)
         print("Run 'python push_now.py' after correcting the Git configuration.")
+
 print("\nDone.")
