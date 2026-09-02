@@ -1,0 +1,3 @@
+Test,Evaluation,Kind,Output,Unit,Samples,Pass95,PassCriterion,MSE,RMSE,MAE,MaxAbsError,SignalRange,NRMSE_percent,R2,Fit_percent,ReferenceIsFlat,Test_origin
+explicit_zero_input,Load2_ZeroInput_0.8s,one_step_pure_test,Displacement,mm,801,True,Fit_percent >= 95,4.771352130365503e-08,0.00021843424938332136,0.00011779507829500562,0.002941717393696308,4.3404002001356226,0.005032583156191359,0.9999998246012413,99.95811936500523,False,Total_Data.xlsx pure test
+explicit_zero_input,Load2_ZeroInput_0.8s,one_step_pure_test,Lorentz force,N,801,True,flat reference: max abs error <= 0.001,2.436107753495464e-09,4.935694230293712e-05,4.3244062952891673e-05,0.00027936999686062336,0.00040909000381361693,,,,True,Total_Data.xlsx pure test
