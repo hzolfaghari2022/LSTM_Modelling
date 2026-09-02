@@ -1,0 +1,29 @@
+{
+  "best_validation_loss": 0.5315544019213121,
+  "displacement_residual_trust": 1.0,
+  "selected_feature_count": 3,
+  "selected_feature_indices_1_based": [
+    11,
+    12,
+    13
+  ],
+  "selected_feature_names": [
+    "previous_force",
+    "previous_force_change",
+    "constant_acceleration_displacement"
+  ],
+  "removed_feature_names": [
+    "current",
+    "current_change",
+    "current_dc_estimate",
+    "mass_ratio",
+    "inverse_mass_ratio",
+    "elapsed_time",
+    "startup_indicator",
+    "previous_displacement",
+    "estimated_velocity",
+    "estimated_acceleration"
+  ],
+  "trainable_parameters": 30593,
+  "prediction_mode": "one-step measured feedback, not autonomous"
+}
