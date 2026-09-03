@@ -8,6 +8,8 @@ already been frozen.
 
 import json
 import os
+import re
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -193,39 +195,333 @@ def _calculate_metrics(measured, predicted, negligible_range):
     }
 
 
-def _plot_inventory(records, data, folder):
-    columns = 4
-    rows = int(np.ceil(len(records) / columns))
-    figure, axes = plt.subplots(rows, columns, figsize=(4.6 * columns, 2.8 * rows))
-    axes = np.asarray(axes).reshape(-1)
-    for axis, record in zip(axes, records):
-        first = record["pad"]
-        time = record["time"][first:]
-        displacement = record["outputs"][first:, 0]
-        current = record["current"][first:]
-        axis.plot(time, displacement, color=BLUE, lw=0.9)
-        twin = axis.twinx()
-        twin.plot(time, current, color=ORANGE, lw=0.65, alpha=0.85)
-        pure = record["name"] in data["pure_test_names"]
-        role_label = _record_role_label(data, record["name"])
-        axis.set_title(
-            f"{record['name']}\n{role_label}",
-            color=PURPLE if pure else GRAY,
-            fontsize=9,
+FAMILY_NAMES = {
+    "dc_plus_chirp": "DC + chirp",
+    "chirp": "Chirp",
+    "dc_plus_sine": "DC + sine",
+    "sine": "Sine only",
+    "step": "Step",
+    "zero_input": "Zero input",
+    "white_noise": "White noise",
+    "prbs": "PRBS",
+    "multisine": "Multisine",
+    "ramp": "Ramp",
+    "pulse": "Pulse",
+    "unknown": "Other",
+}
+
+INVENTORY_GROUPS = (
+    ("dc_chirp", "DC + chirp inputs", ("dc_plus_chirp",)),
+    ("chirp_only", "Chirp-only inputs", ("chirp",)),
+    ("dc_sine", "DC + sine inputs", ("dc_plus_sine",)),
+    ("sine_only", "Sine-only inputs", ("sine",)),
+    ("multisine", "Multisine inputs", ("multisine",)),
+    ("step", "Step inputs", ("step",)),
+    ("pulse", "Pulse inputs", ("pulse",)),
+    ("ramp", "Ramp inputs", ("ramp",)),
+    ("zero_input", "Zero-input records", ("zero_input",)),
+    ("white_noise", "White-noise inputs", ("white_noise",)),
+    ("prbs", "PRBS inputs", ("prbs",)),
+    ("other", "Other inputs", ("unknown",)),
+)
+
+INVENTORY_ROLE_STYLE = {
+    "development": ("DEVELOPMENT", "#37474f", "#f7f9fa"),
+    "PURE TEST": ("PURE TEST", PURPLE, "#f7edf9"),
+    "INDEPENDENT TEST": ("INDEPENDENT TEST", RED, "#fdeeee"),
+}
+
+
+def _load_number(record_name):
+    match = re.search(r"Load(\d+)", str(record_name), re.IGNORECASE)
+    return f"Load {match.group(1)}" if match else "Load not labelled"
+
+
+def _dominant_frequency(time, current):
+    time = np.asarray(time, dtype=float)
+    current = np.asarray(current, dtype=float)
+    if len(time) < 4 or np.ptp(current) <= 1e-12:
+        return np.nan
+    dt = float(np.median(np.diff(time)))
+    centred = current - np.mean(current)
+    frequencies = np.fft.rfftfreq(len(centred), dt)
+    amplitude = np.abs(np.fft.rfft(centred))
+    if len(amplitude) <= 1:
+        return np.nan
+    return float(frequencies[1:][np.argmax(amplitude[1:])])
+
+
+def _description_number(description, pattern):
+    match = re.search(pattern, str(description), re.IGNORECASE)
+    return float(match.group(1)) if match else np.nan
+
+
+def _input_details(record):
+    family = record.get("family", "unknown")
+    first = int(record.get("pad", 0))
+    time = np.asarray(record["time"])[first:]
+    current = np.asarray(record["current"])[first:]
+    description = record.get("description", "")
+
+    if family in ("dc_plus_chirp", "chirp"):
+        dc = _description_number(description, r"dc[_ ]?offset\s*=\s*([\d.]+)")
+        amplitude = _description_number(
+            description, r"chirp current amplitude\s*=\s*([\d.]+)"
         )
-        axis.set_xlabel("time [s]")
-        axis.set_ylabel("x [mm]", color=BLUE)
-        twin.set_ylabel("I [A]", color=ORANGE)
-        axis.grid(True)
-    for axis in axes[len(records) :]:
-        axis.axis("off")
-    figure.suptitle(
-        f"Figure 1  Complete measured-data inventory: {len(records)} unique records\n"
-        "Purple titles are whole untouched pure or independent-test records",
-        fontsize=15,
+        start = _description_number(description, r"start freq\w*\s*=\s*([\d.]+)")
+        stop = _description_number(description, r"stop freq\w*\s*=\s*([\d.]+)")
+        details = []
+        if np.isfinite(dc):
+            details.append(f"DC {dc * 1000:.0f} mA")
+        if np.isfinite(amplitude):
+            details.append(f"chirp amplitude {amplitude * 1000:.0f} mA")
+        if np.isfinite(start) and np.isfinite(stop):
+            details.append(f"{start:.0f}\N{EN DASH}{stop:.0f} Hz")
+        return "; ".join(details) or "chirp input"
+
+    if family in ("dc_plus_sine", "sine", "multisine"):
+        dc = 0.5 * (float(np.max(current)) + float(np.min(current)))
+        amplitude = 0.5 * float(np.ptp(current))
+        frequency = _dominant_frequency(time, current)
+        details = []
+        if family == "dc_plus_sine":
+            details.append(f"DC {dc * 1000:.0f} mA")
+        details.append(f"amplitude {amplitude * 1000:.0f} mA")
+        if np.isfinite(frequency):
+            details.append(f"{frequency:.0f} Hz")
+        return "; ".join(details)
+
+    if family == "step":
+        level = float(np.median(current[max(0, len(current) // 2) :]))
+        return f"level {level * 1000:.0f} mA"
+    if family == "zero_input":
+        return "0 A applied current"
+    if family == "white_noise":
+        return f"RMS {np.std(current) * 1000:.1f} mA"
+    if family == "prbs":
+        return f"range {np.min(current) * 1000:.0f} to {np.max(current) * 1000:.0f} mA"
+    if family in ("pulse", "ramp"):
+        return f"range {np.min(current) * 1000:.0f} to {np.max(current) * 1000:.0f} mA"
+    return str(description).strip() or "unclassified input"
+
+
+def _inventory_rows(records, data):
+    rows = []
+    for record in records:
+        first = int(record.get("pad", 0))
+        time = np.asarray(record["time"])[first:]
+        role = _record_role_label(data, record["name"])
+        duration = float(record.get("duration_s", time[-1] - time[0]))
+        rows.append(
+            {
+                "Record": record["name"],
+                "Signal_type": FAMILY_NAMES.get(record.get("family"), "Other"),
+                "Load_configuration": _load_number(record["name"]),
+                "External_load_g": float(record.get("load_mass_g", np.nan)),
+                "Total_moving_mass_g": float(record.get("total_mass_g", np.nan)),
+                "Input_specification": _input_details(record),
+                "Duration_s": duration,
+                "Data_role": role.upper(),
+                "Source_workbook": record.get("source_workbook", "Total_Data.xlsx"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _plot_inventory_summary(inventory, folder):
+    display = inventory[
+        [
+            "Signal_type",
+            "Load_configuration",
+            "External_load_g",
+            "Input_specification",
+            "Duration_s",
+            "Data_role",
+        ]
+    ].copy()
+    display.columns = [
+        "Signal",
+        "Load",
+        "External load [g]",
+        "Applied-current specification",
+        "Duration [s]",
+        "Role",
+    ]
+    display["External load [g]"] = display["External load [g]"].map(
+        lambda value: f"{value:.3f}"
     )
-    figure.tight_layout(rect=[0, 0, 1, 0.965])
+    display["Duration [s]"] = display["Duration [s]"].map(
+        lambda value: f"{value:g}"
+    )
+
+    counts = inventory["Data_role"].value_counts()
+    development = int(counts.get("DEVELOPMENT", 0))
+    pure = int(counts.get("PURE TEST", 0))
+    independent = int(counts.get("INDEPENDENT TEST", 0))
+    has_noise = bool((inventory["Signal_type"] == "White noise").any())
+    noise_note = (
+        "White-noise records: present"
+        if has_noise
+        else "White-noise records: NONE in the current dataset"
+    )
+
+    figure, axis = plt.subplots(figsize=(17, 0.48 * len(display) + 2.7))
+    axis.axis("off")
+    table = axis.table(
+        cellText=display.values,
+        colLabels=display.columns,
+        cellLoc="left",
+        colLoc="left",
+        colWidths=[0.12, 0.075, 0.12, 0.36, 0.09, 0.13],
+        bbox=[0.01, 0.02, 0.98, 0.80],
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 1.35)
+    for column in range(len(display.columns)):
+        cell = table[(0, column)]
+        cell.set_facecolor("#304b5a")
+        cell.set_text_props(color="white", weight="bold")
+    for row_index, role in enumerate(display["Role"], start=1):
+        background = {
+            "PURE TEST": "#f1ddf5",
+            "INDEPENDENT TEST": "#fbdede",
+        }.get(role, "#f4f7f8" if row_index % 2 else "white")
+        for column in range(len(display.columns)):
+            table[(row_index, column)].set_facecolor(background)
+            table[(row_index, column)].set_edgecolor("#c5cdd1")
+    figure.suptitle(
+        f"Measured-data inventory: {len(inventory)} unique experiments",
+        fontsize=16,
+        weight="bold",
+        y=0.985,
+    )
+    axis.set_title(
+        f"{development} development | {pure} untouched pure test | "
+        f"{independent} optional independent test | {noise_note}",
+        fontsize=11,
+        y=0.88,
+        color=GRAY,
+    )
     _finish(figure, folder, "01_complete_record_inventory.png")
+
+
+def _plot_inventory_group(records, data, group_key, title, folder):
+    if not records:
+        return
+    rows = len(records)
+    figure, axes = plt.subplots(
+        rows,
+        4,
+        figsize=(18, 2.35 * rows + 2.0),
+        squeeze=False,
+        gridspec_kw={"width_ratios": [2.65, 3.0, 3.0, 3.0]},
+    )
+    column_titles = (
+        ("Applied current, I(t) [A]", ORANGE),
+        ("Measured displacement, x(t) [mm]", BLUE),
+        ("Measured Lorentz force, F(t) [N]", GREEN),
+    )
+    axes[0, 0].set_title("Experiment", color=GRAY, weight="bold", pad=9)
+    for column, (column_title, color) in enumerate(column_titles):
+        axes[0, column + 1].set_title(
+            column_title, color=color, weight="bold", pad=9
+        )
+
+    for row, record in enumerate(records):
+        first = int(record.get("pad", 0))
+        time = np.asarray(record["time"])[first:]
+        signals = (
+            np.asarray(record["current"])[first:],
+            np.asarray(record["outputs"])[first:, 0],
+            np.asarray(record["outputs"])[first:, 1],
+        )
+        role = _record_role_label(data, record["name"])
+        role_text, role_color, background = INVENTORY_ROLE_STYLE[role]
+        label_axis = axes[row, 0]
+        label_axis.axis("off")
+        label_axis.set_facecolor(background)
+        for column, (signal, color) in enumerate(
+            zip(signals, (ORANGE, BLUE, GREEN))
+        ):
+            axis = axes[row, column + 1]
+            axis.set_facecolor(background)
+            axis.plot(time, signal, color=color, lw=1.15)
+            axis.grid(True)
+            axis.set_xlim(float(time[0]), float(time[-1]))
+            axis.set_xlabel("Time [s]")
+            axis.ticklabel_format(axis="y", style="sci", scilimits=(-3, 4))
+            if np.ptp(signal) <= 1e-12:
+                centre = float(signal[0])
+                margin = max(0.005, abs(centre) * 0.05)
+                axis.set_ylim(centre - margin, centre + margin)
+
+        load_mass = float(record.get("load_mass_g", np.nan))
+        total_mass = float(record.get("total_mass_g", np.nan))
+        duration = float(record.get("duration_s", time[-1] - time[0]))
+        details = textwrap.fill(_input_details(record), width=32)
+        mass_line = f"External load: {load_mass:.3f} g"
+        if np.isfinite(total_mass):
+            mass_line += f" | total: {total_mass:.3f} g"
+        mass_line = textwrap.fill(mass_line, width=34)
+        label = (
+            f"{_load_number(record['name'])}  |  {role_text}\n"
+            f"{FAMILY_NAMES.get(record.get('family'), 'Other')}\n"
+            f"{details}\n"
+            f"{mass_line}\nDuration: {duration:g} s"
+        )
+        label_axis.text(
+            0.02,
+            0.5,
+            label,
+            transform=label_axis.transAxes,
+            ha="left",
+            va="center",
+            fontsize=8.4,
+            color=role_color,
+            linespacing=1.45,
+            wrap=True,
+        )
+
+    figure.suptitle(
+        f"Measured-data waveforms — {title}\n"
+        "Each row is one complete experiment; pure tests are shaded purple",
+        fontsize=15,
+        weight="bold",
+        y=0.995,
+    )
+    figure.subplots_adjust(
+        left=0.025,
+        right=0.985,
+        top=0.84,
+        bottom=0.07,
+        hspace=0.86,
+        wspace=0.30,
+    )
+    _finish(figure, folder, f"01_{group_key}_measured_data.png")
+
+
+def _plot_inventory(records, data, results_folder, folder):
+    inventory = _inventory_rows(records, data)
+    inventory.to_csv(
+        Path(results_folder) / "measured_data_inventory_for_advisor.csv",
+        index=False,
+    )
+    _plot_inventory_summary(inventory, folder)
+
+    covered = set()
+    for group_key, title, families in INVENTORY_GROUPS:
+        group_records = [
+            record for record in records if record.get("family") in families
+        ]
+        covered.update(families)
+        _plot_inventory_group(group_records, data, group_key, title, folder)
+    remaining = [
+        record for record in records if record.get("family") not in covered
+    ]
+    _plot_inventory_group(
+        remaining, data, "additional", "Additional inputs", folder
+    )
 
 
 def _plot_split(data, folder):
@@ -934,7 +1230,7 @@ def generate_complete_figures(
     records_by_name = {record["name"]: record for record in records}
 
     print("\nBuilding the complete figure report ...", flush=True)
-    _plot_inventory(records, data, figures_folder)
+    _plot_inventory(records, data, results_folder, figures_folder)
     _plot_split(data, figures_folder)
     _plot_learning(history, best_loss, residual_trust, figures_folder)
     _plot_development_grids(data, lookup, metrics, figures_folder)
@@ -1053,6 +1349,11 @@ def _load_saved_report(results_folder):
                 "name": row.record,
                 "family": row.family,
                 "load_mass_g": float(row.load_mass_g),
+                "total_mass_g": float(row.total_mass_g),
+                "duration_s": float(row.duration_s),
+                "native_rate_hz": float(row.native_rate_hz),
+                "description": str(row.description),
+                "source_workbook": str(row.source_workbook),
                 "pad": 0,
                 "time": time[order],
                 "current": np.concatenate(

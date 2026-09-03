@@ -65,6 +65,16 @@ def classify_family(description):
 
     if "no current" in text or "zero current" in text:
         return "zero_input"
+    if "white noise" in text or "band limited noise" in text:
+        return "white_noise"
+    if "prbs" in text or "pseudo random binary" in text:
+        return "prbs"
+    if "multisine" in text or "multi sine" in text:
+        return "multisine"
+    if "ramp" in text:
+        return "ramp"
+    if "pulse" in text:
+        return "pulse"
     if "chirp" in text:
         return "dc_plus_chirp" if "dc offset" in text else "chirp"
     if "sine only" in text:
@@ -85,6 +95,11 @@ FAMILY_LABEL = {
     "dc_plus_sine": "DCSine",
     "chirp": "Chirp",
     "dc_plus_chirp": "DCChirp",
+    "white_noise": "WhiteNoise",
+    "prbs": "PRBS",
+    "multisine": "Multisine",
+    "ramp": "Ramp",
+    "pulse": "Pulse",
     "unknown": "Case",
 }
 

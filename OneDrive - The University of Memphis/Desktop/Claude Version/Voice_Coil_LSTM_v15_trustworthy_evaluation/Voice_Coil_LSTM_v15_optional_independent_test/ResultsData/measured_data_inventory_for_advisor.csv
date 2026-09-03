@@ -1,0 +1,19 @@
+Record,Signal_type,Load_configuration,External_load_g,Total_moving_mass_g,Input_specification,Duration_s,Data_role,Source_workbook
+Load2_DCChirp_67mA_31Hz_7s,DC + chirp,Load 2,3.813,5.24,DC 67 mA; chirp amplitude 20 mA; 1–31 Hz,7.0,DEVELOPMENT,Total_Data.xlsx
+Load2_DCChirp_87mA_31Hz_7s,DC + chirp,Load 2,3.813,5.24,DC 87 mA; chirp amplitude 20 mA; 1–31 Hz,7.0,DEVELOPMENT,Total_Data.xlsx
+Load2_DCChirp_107mA_31Hz_7s,DC + chirp,Load 2,3.813,5.24,DC 107 mA; chirp amplitude 20 mA; 1–31 Hz,7.0,DEVELOPMENT,Total_Data.xlsx
+Load2_DCChirp_127mA_31Hz_7s,DC + chirp,Load 2,3.813,5.24,DC 127 mA; chirp amplitude 20 mA; 1–31 Hz,7.0,DEVELOPMENT,Total_Data.xlsx
+Load2_DCChirp_147mA_31Hz_7s,DC + chirp,Load 2,3.813,5.24,DC 147 mA; chirp amplitude 20 mA; 1–31 Hz,7.0,PURE TEST,Total_Data.xlsx
+Load2_DCChirp_107mA_51Hz_11s,DC + chirp,Load 2,3.813,5.24,DC 107 mA; chirp amplitude 30 mA; 1–51 Hz,11.0,DEVELOPMENT,Total_Data.xlsx
+Load1_DCSine_120mA_0.8s,DC + sine,Load 1,1.906,3.333,DC 120 mA; amplitude 120 mA; 50 Hz,0.800000011920929,DEVELOPMENT,Total_Data.xlsx
+Load1_Step_120mA_0.8s,Step,Load 1,1.906,3.333,level 120 mA,0.800000011920929,DEVELOPMENT,Total_Data.xlsx
+Load1_Sine_120mA_0.8s,Sine only,Load 1,1.906,3.333,amplitude 120 mA; 50 Hz,0.800000011920929,DEVELOPMENT,Total_Data.xlsx
+Load1_ZeroInput_0.793s,Zero input,Load 1,1.906,3.333,0 A applied current,0.7929999828338623,DEVELOPMENT,Total_Data.xlsx
+Load2_DCSine_150mA_0.8s,DC + sine,Load 2,3.813,5.24,DC 150 mA; amplitude 150 mA; 50 Hz,0.800000011920929,DEVELOPMENT,Total_Data.xlsx
+Load2_Step_150mA_0.8s,Step,Load 2,3.813,5.24,level 150 mA,0.800000011920929,PURE TEST,Total_Data.xlsx
+Load2_Sine_150mA_0.8s,Sine only,Load 2,3.813,5.24,amplitude 150 mA; 50 Hz,0.800000011920929,DEVELOPMENT,Total_Data.xlsx
+Load2_ZeroInput_0.8s,Zero input,Load 2,3.813,5.24,0 A applied current,0.800000011920929,PURE TEST,Total_Data.xlsx
+Load3_DCSine_200mA_1.6s,DC + sine,Load 3,7.625,9.052,DC 200 mA; amplitude 200 mA; 50 Hz,1.600000023841858,PURE TEST,Total_Data.xlsx
+Load3_Step_200mA_1.6s,Step,Load 3,7.625,9.052,level 200 mA,1.600000023841858,PURE TEST,Total_Data.xlsx
+Load3_Sine_200mA_1.6s,Sine only,Load 3,7.625,9.052,amplitude 200 mA; 50 Hz,1.600000023841858,DEVELOPMENT,Total_Data.xlsx
+Load3_ZeroInput_1.6s,Zero input,Load 3,7.625,9.052,0 A applied current,1.600000023841858,DEVELOPMENT,Total_Data.xlsx

@@ -76,8 +76,13 @@ long dashes, and sparse white-centred markers. This makes nearly coincident
 curves distinguishable on screen, in print, and for readers with limited
 color perception.
 
-- Figure 1: complete inventory of every development, pure-test, and optional
-  independent-test record;
+- Figure 1: concise table of every experiment, including signal type, load,
+  current specification, duration, and data role;
+- Figure 1 family sheets: separate, readable applied-current, displacement,
+  and force waveforms for DC+chirp, chirp-only, DC+sine, sine-only, multisine,
+  step, pulse, ramp, zero-input, white-noise, PRBS, and other records. A sheet
+  is generated automatically for every family that is present. The summary
+  explicitly reports when white-noise data are absent;
 - Figure 2: training/validation/internal-test/pure-test split map;
 - Figure 3: learning curves;
 - Figures 4 and 5: measured versus predicted displacement and force for all
@@ -102,6 +107,9 @@ color perception.
 - `ResultsData/one_step_pooled_role_metrics.csv` contains pooled results for
   all four roles;
 - `ResultsData/one_step_predictions/*.csv`
+- `ResultsData/measured_data_inventory_for_advisor.csv` contains the exact
+  signal type, load, current specification, duration, role, and source for
+  every measured experiment;
 - `ResultsData/one_step_prediction_file_map.csv` maps the short numbered CSV
   filenames to their complete data role and experiment name. Short filenames
   prevent Windows' 260-character path-limit failure in deeply nested folders.
