@@ -194,3 +194,51 @@ Optional runtime settings:
 | `DLSTM_CPU_THREADS` | up to 8 | CPU threads used by PyTorch |
 | `DLSTM_RESULTS_FOLDER` | `ResultsData` | Primary numerical results folder |
 | `DLSTM_FIGURES_FOLDER` | `FiguresResults` | Primary figure folder |
+
+## Network-capacity and feature-ablation studies
+
+The original `main.py` and its model settings remain unchanged. A separate
+script evaluates the learned displacement-correction LSTM. Lorentz force is
+not an LSTM output in this one-step implementation; it remains calculated by
+the existing causal force rule.
+
+Run the real width/depth study (widths 8--96 and depths 1--4):
+
+```powershell
+python ablation_study.py --study capacity
+```
+
+Run validation-only backward elimination of the 13 LSTM input features:
+
+```powershell
+python ablation_study.py --study features
+```
+
+Run both studies:
+
+```powershell
+python ablation_study.py --study all
+```
+
+First verify both workflows quickly if desired:
+
+```powershell
+$env:DLSTM_SKIP_GITHUB_PUSH="1"
+python ablation_study.py --study all --smoke-test
+Remove-Item Env:DLSTM_SKIP_GITHUB_PUSH
+```
+
+Smoke-test numbers are labelled `NOT REPORTABLE`. The full results are saved
+under `AblationStudy`, separate from the original `ResultsData` and
+`FiguresResults`. The principal architecture figure is
+`AblationStudy/NetworkCapacity/Figures/network_width_depth_capacity.png`.
+It plots measured training and validation displacement RMSE, not a generic
+idealized curve. Error bars show variation across three random seeds. The
+green line marks the architecture selected by validation error, and the
+orange line marks the unchanged V15 setting (48 units, 2 LSTM layers).
+
+Feature removal also uses validation data only. The selected reduced feature
+set is evaluated on the whole untouched pure-test experiments only after the
+selection has been frozen. By default, each completed full ablation run uses
+the existing GitHub push helper. Set `DLSTM_SKIP_GITHUB_PUSH=1` for a
+deliberately local run.
