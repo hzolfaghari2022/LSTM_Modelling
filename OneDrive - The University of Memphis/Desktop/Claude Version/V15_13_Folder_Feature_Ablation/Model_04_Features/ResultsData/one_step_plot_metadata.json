@@ -1,0 +1,18 @@
+{
+  "best_validation_loss": 0.9162649849179919,
+  "displacement_residual_trust": 1.0,
+  "prediction_mode": "one-step measured feedback, not autonomous",
+  "feature_count": 4,
+  "feature_indices": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "feature_names": [
+    "current",
+    "current_change",
+    "current_dc_estimate",
+    "mass_ratio"
+  ]
+}

@@ -1,0 +1,22 @@
+V15 CUMULATIVE FEATURE-ABLATION COMPARISON
+===========================================
+
+Thirteen independent projects were trained: 13, 12, ..., 1 retained causal features. Each reduced case keeps the first N features in the documented V15 order.
+
+Best validation displacement RMSE: Model_13_Features
+  RMSE = 0.00024204019 mm
+  Fit  = 99.9844%
+  R2   = 0.99999998
+  Pure-test confirmation fit = 99.9514%
+  Worst individual pure-test fit = 99.0384% (Load3_DCSine_200mA_1.6s)
+
+Complete 13-feature model:
+  Validation RMSE = 0.00024204019 mm
+  Validation fit  = 99.9844%
+  Pure-test fit   = 99.9514%
+
+Scientific interpretation:
+- The best feature count is selected from validation displacement RMSE, not from pure-test results.
+- Pure tests are shown only to confirm the already selected model.
+- These are cumulative removals in one declared order; they do not prove that an individually removed feature is universally unimportant.
+- The LSTM feature ablation affects displacement prediction only. Lorentz force is produced by the unchanged separate causal force rule, so its metrics should remain essentially identical across cases.
