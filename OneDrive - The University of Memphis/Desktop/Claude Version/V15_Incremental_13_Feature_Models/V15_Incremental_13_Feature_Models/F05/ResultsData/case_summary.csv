@@ -1,0 +1,9 @@
+feature_count,newest_feature,retained_features,data_role,output,mean_RMSE_across_records,worst_RMSE_across_records,mean_fit_percent_across_records,worst_fit_percent_across_records,trainable_parameters
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_training,Displacement,0.000690130939870663,0.004330274256064099,99.86232639000279,99.10282737650388,30977
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_training,Lorentz force,0.0003196321454638411,0.0009884227647230345,97.74243346150942,95.0899842458551,30977
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_validation,Displacement,0.0005357125136804423,0.0044716886307132305,99.73844632607285,99.13158529032889,30977
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_validation,Lorentz force,0.00024152559049747674,0.0009655486017492009,97.71046257281927,92.85671629397896,30977
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_internal_test,Displacement,0.0005077297130702248,0.004322995790251045,99.71867151909827,99.09864353114614,30977
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_internal_test,Lorentz force,0.000225023908551763,0.000965952614369417,98.34973293669488,97.17659826825839,30977
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_pure_test,Displacement,0.0003910925598276084,0.00073400496806588,99.81708258320319,99.45258503175279,30977
+5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio,one_step_pure_test,Lorentz force,0.00027807350632392364,0.0006659663933648702,96.85003661923356,95.86725271415855,30977

@@ -1,0 +1,16 @@
+{
+  "requested_feature_count": 5,
+  "actual_lstm_input_size": 5,
+  "retained_features": [
+    "current",
+    "current_change",
+    "current_dc_estimate",
+    "mass_ratio",
+    "inverse_mass_ratio"
+  ],
+  "trainable_parameters": 30977,
+  "history_samples": 64,
+  "lstm_target": "displacement residual only",
+  "force_note": "Force is computed by a separate causal rule.",
+  "residual_trust_used": 1.0
+}

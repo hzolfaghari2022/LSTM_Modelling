@@ -1,0 +1,9 @@
+feature_count,newest_feature,retained_features,data_role,output,mean_RMSE_across_records,worst_RMSE_across_records,mean_fit_percent_across_records,worst_fit_percent_across_records,trainable_parameters
+2,current_change,current | current_change,one_step_training,Displacement,0.0007088301557385066,0.004325211881712076,99.85758297757357,99.10387623008913,30401
+2,current_change,current | current_change,one_step_training,Lorentz force,0.0003196321454638411,0.0009884227647230345,97.74243346150942,95.0899842458551,30401
+2,current_change,current | current_change,one_step_validation,Displacement,0.0005708718668054263,0.004466791722666474,99.7081907327929,99.1325362838642,30401
+2,current_change,current | current_change,one_step_validation,Lorentz force,0.00024152559049747674,0.0009655486017492009,97.71046257281927,92.85671629397896,30401
+2,current_change,current | current_change,one_step_internal_test,Displacement,0.0005319915894310179,0.0043180069929588906,99.6930467724897,99.09968370905268,30401
+2,current_change,current | current_change,one_step_internal_test,Lorentz force,0.000225023908551763,0.000965952614369417,98.34973293669488,97.17659826825839,30401
+2,current_change,current | current_change,one_step_pure_test,Displacement,0.0003328512834087735,0.0005751525140892147,99.83846215721168,99.5710559070641,30401
+2,current_change,current | current_change,one_step_pure_test,Lorentz force,0.00027807350632392364,0.0006659663933648702,96.85003661923356,95.86725271415855,30401
