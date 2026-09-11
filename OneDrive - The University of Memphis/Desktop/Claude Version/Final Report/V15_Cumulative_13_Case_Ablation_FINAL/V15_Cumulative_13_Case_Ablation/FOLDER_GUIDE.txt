@@ -1,0 +1,56 @@
+V15 CUMULATIVE 13-CASE FEATURE ABLATION
+========================================
+
+RUN ALL 13 CASES
+----------------
+From this top-level folder, run:
+
+    python main.py
+
+or double-click:
+
+    RUN_ALL_13_CASES.bat
+
+This trains F01 through F13, compares their results, and creates:
+
+    ComparisonResults
+    ComparisonFigures
+    ComparisonFigures\ReportFigures
+
+The ReportFigures folder contains the three figures used by the separate
+Overleaf report.
+
+
+RUN ONE CASE ONLY
+-----------------
+Open any folder from F01 through F13 and run:
+
+    python main.py
+
+or double-click RUN_THIS_CASE.bat inside that folder.
+
+F01 uses one feature (current). Each subsequent folder adds one feature.
+F13 uses all 13 features.
+
+
+REBUILD THE COMPARISON WITHOUT RETRAINING
+-----------------------------------------
+After the 13 case folders have completed results, run:
+
+    python main.py --compare-only
+
+or double-click:
+
+    REBUILD_COMPARISON_ONLY.bat
+
+
+IMPORTANT SCIENTIFIC INTERPRETATION
+-----------------------------------
+The LSTM feature-ablation comparison applies to displacement prediction.
+The LSTM learns a displacement correction to the physical baseline. Force is
+calculated using the unchanged separate causal force rule, so force should not
+be used to rank the 13 LSTM feature configurations.
+
+F01-F13 indicate the number of retained features. They do not indicate the
+number of validation or pure-test experiments. The project has five untouched
+pure-test experiments.

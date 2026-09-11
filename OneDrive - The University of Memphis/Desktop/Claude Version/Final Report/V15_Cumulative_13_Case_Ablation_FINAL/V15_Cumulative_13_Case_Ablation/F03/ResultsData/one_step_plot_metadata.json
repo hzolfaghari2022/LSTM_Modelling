@@ -1,0 +1,18 @@
+{
+  "best_validation_loss": 0.9154007971010287,
+  "displacement_residual_trust": 1.0,
+  "validation_selected_displacement_residual_trust": 1.0,
+  "feature_indices": [
+    0,
+    1,
+    2
+  ],
+  "feature_names": [
+    "current",
+    "current_change",
+    "current_dc_estimate"
+  ],
+  "input_feature_count": 3,
+  "trainable_parameters": 30593,
+  "prediction_mode": "one-step measured feedback, not autonomous"
+}

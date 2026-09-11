@@ -1,0 +1,14 @@
+case,feature_count,new_feature_added,retained_features
+F01,1,current,current
+F02,2,current_change,current | current_change
+F03,3,current_dc_estimate,current | current_change | current_dc_estimate
+F04,4,mass_ratio,current | current_change | current_dc_estimate | mass_ratio
+F05,5,inverse_mass_ratio,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio
+F06,6,elapsed_time,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time
+F07,7,startup_indicator,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time | startup_indicator
+F08,8,previous_displacement,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time | startup_indicator | previous_displacement
+F09,9,previous_velocity,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time | startup_indicator | previous_displacement | previous_velocity
+F10,10,previous_acceleration,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time | startup_indicator | previous_displacement | previous_velocity | previous_acceleration
+F11,11,previous_force,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time | startup_indicator | previous_displacement | previous_velocity | previous_acceleration | previous_force
+F12,12,force_change,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time | startup_indicator | previous_displacement | previous_velocity | previous_acceleration | previous_force | force_change
+F13,13,quadratic_displacement_baseline,current | current_change | current_dc_estimate | mass_ratio | inverse_mass_ratio | elapsed_time | startup_indicator | previous_displacement | previous_velocity | previous_acceleration | previous_force | force_change | quadratic_displacement_baseline
