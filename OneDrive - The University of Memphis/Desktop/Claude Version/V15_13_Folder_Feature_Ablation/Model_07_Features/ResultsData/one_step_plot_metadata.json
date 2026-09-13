@@ -1,6 +1,7 @@
 {
   "best_validation_loss": 0.9156672965085212,
   "displacement_residual_trust": 1.0,
+  "validation_selected_displacement_residual_trust": 1.0,
   "prediction_mode": "one-step measured feedback, not autonomous",
   "feature_count": 7,
   "feature_indices": [

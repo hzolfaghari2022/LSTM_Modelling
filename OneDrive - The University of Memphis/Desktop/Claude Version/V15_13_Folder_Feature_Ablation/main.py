@@ -2,6 +2,7 @@
 
 import argparse
 from datetime import datetime
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -101,6 +102,17 @@ def collect_comparison():
         validation_force = pooled_row(folder, "Validation", "Lorentz force")
         pure_force = pooled_row(folder, "Pure test", "Lorentz force")
         worst = worst_pure_displacement(folder)
+        with open(
+            folder / "ResultsData" / "one_step_plot_metadata.json",
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            metadata = json.load(handle)
+        if int(metadata["feature_count"]) != count:
+            raise RuntimeError(
+                f"Ablation audit failed for {folder.name}: requested {count} "
+                f"features but its saved model reports {metadata['feature_count']}."
+            )
         active = list(ONE_STEP_FEATURE_NAMES[:count])
         removed = list(ONE_STEP_FEATURE_NAMES[count:])
         rows.append(
@@ -110,6 +122,13 @@ def collect_comparison():
                 "trainable_parameters": trainable_parameter_count(count),
                 "active_features": "; ".join(active),
                 "removed_features": "; ".join(removed) if removed else "None",
+                "actual_lstm_input_features": int(metadata["feature_count"]),
+                "residual_trust_used": float(
+                    metadata["displacement_residual_trust"]
+                ),
+                "validation_selected_residual_trust": float(
+                    metadata["validation_selected_displacement_residual_trust"]
+                ),
                 "training_displacement_RMSE": float(training["RMSE"]),
                 "training_displacement_Fit_percent": float(training["Fit_percent"]),
                 "validation_displacement_RMSE": float(validation["RMSE"]),
@@ -130,6 +149,32 @@ def collect_comparison():
             }
         )
     table = pd.DataFrame(rows)
+    full_prediction_folder = (
+        case_folder(13) / "ResultsData" / "one_step_predictions"
+    )
+    difference_rmse = []
+    difference_max = []
+    for count in table["feature_count"]:
+        current_prediction_folder = (
+            case_folder(int(count)) / "ResultsData" / "one_step_predictions"
+        )
+        squared_differences = []
+        absolute_differences = []
+        for full_path in sorted(full_prediction_folder.glob("one_step_pure_test__*.csv")):
+            current_path = current_prediction_folder / full_path.name
+            if not current_path.exists():
+                raise RuntimeError(f"Missing matching prediction file: {current_path}")
+            full_values = pd.read_csv(full_path)["predicted_displacement_mm"].to_numpy()
+            current_values = pd.read_csv(current_path)["predicted_displacement_mm"].to_numpy()
+            if full_values.shape != current_values.shape:
+                raise RuntimeError(f"Prediction length mismatch: {current_path}")
+            delta = current_values - full_values
+            squared_differences.extend(np.square(delta).tolist())
+            absolute_differences.extend(np.abs(delta).tolist())
+        difference_rmse.append(float(np.sqrt(np.mean(squared_differences))))
+        difference_max.append(float(np.max(absolute_differences)))
+    table["prediction_RMSE_difference_vs_13feature_mm"] = difference_rmse
+    table["prediction_max_difference_vs_13feature_mm"] = difference_max
     table["validation_rank"] = (
         table["validation_displacement_RMSE"]
         .rank(method="min", ascending=True)
@@ -245,6 +290,32 @@ def make_figures(table, best_count):
     figure.savefig(figures / "03_feature_retention_matrix.png", dpi=240, bbox_inches="tight")
     plt.close(figure)
 
+    figure, axis = plt.subplots(figsize=(10.8, 6.2))
+    axis.semilogy(
+        ordered["feature_count"],
+        np.maximum(
+            ordered["prediction_RMSE_difference_vs_13feature_mm"], 1e-16
+        ),
+        "o-",
+        color="#6A1B9A",
+    )
+    axis.set_xlabel("Retained LSTM features")
+    axis.set_ylabel("Prediction difference from 13-feature model [mm]")
+    axis.set_xticks(range(1, 14))
+    axis.grid(True, which="both", alpha=0.28)
+    axis.set_title(
+        "Does Feature Removal Actually Change the Prediction?",
+        fontsize=14,
+        fontweight="bold",
+    )
+    figure.tight_layout()
+    figure.savefig(
+        figures / "04_prediction_difference_audit.png",
+        dpi=240,
+        bbox_inches="tight",
+    )
+    plt.close(figure)
+
 
 def write_report(table, best_count):
     results = HERE / "ComparisonResults"
@@ -258,6 +329,17 @@ def write_report(table, best_count):
 
     best = ranking.iloc[0]
     complete = table[table["feature_count"] == 13].iloc[0]
+    reduced = table[table["feature_count"] < 13]
+    exact_same = bool(
+        np.all(reduced["prediction_max_difference_vs_13feature_mm"] <= 1e-12)
+    )
+    equality_note = (
+        "- WARNING: all reduced displacement predictions are numerically "
+        "identical to the 13-feature prediction. Check the saved audit columns.\n"
+        if exact_same
+        else "- The prediction-difference audit confirms that feature removal "
+        "changed the displacement predictions.\n"
+    )
     report = (
         "V15 CUMULATIVE FEATURE-ABLATION COMPARISON\n"
         "===========================================\n\n"
@@ -284,7 +366,10 @@ def write_report(table, best_count):
         "that an individually removed feature is universally unimportant.\n"
         "- The LSTM feature ablation affects displacement prediction only. Lorentz "
         "force is produced by the unchanged separate causal force rule, so its "
-        "metrics should remain essentially identical across cases.\n"
+        "metrics must remain identical across cases.\n"
+        + equality_note
+        + "- More features are not guaranteed to improve validation accuracy; "
+        "redundant or noisy features can have little effect or reduce accuracy.\n"
     )
     (results / "COMPARISON_REPORT.txt").write_text(report, encoding="utf-8")
     return report

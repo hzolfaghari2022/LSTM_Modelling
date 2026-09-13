@@ -488,6 +488,7 @@ def run_one_step_study(
     results_folder,
     figures_folder,
     feature_indices=None,
+    residual_trust_override=None,
 ):
     """Train on development blocks, freeze, then evaluate whole pure records."""
     torch.manual_seed(SEED)
@@ -655,7 +656,20 @@ def run_one_step_study(
                 1.0,
             )
         )
-    print(f"Validation-selected displacement residual trust: {residual_trust:.3f}")
+    validation_selected_residual_trust = residual_trust
+    print(
+        "Validation-selected displacement residual trust: "
+        f"{validation_selected_residual_trust:.6f}"
+    )
+    if residual_trust_override is not None:
+        residual_trust_override = float(residual_trust_override)
+        if not 0.0 <= residual_trust_override <= 1.0:
+            raise ValueError("residual_trust_override must be between 0 and 1.")
+        residual_trust = residual_trust_override
+        print(
+            "Feature-ablation audit uses the raw LSTM correction with "
+            f"residual trust fixed at {residual_trust:.6f}."
+        )
 
     rows = []
     evaluations = []
@@ -762,6 +776,9 @@ def run_one_step_study(
             "target_std": target_std,
             "startup_force_gain_N_per_A": startup_gain,
             "displacement_residual_trust": residual_trust,
+            "validation_selected_displacement_residual_trust": (
+                validation_selected_residual_trust
+            ),
             "history_samples": HISTORY_SAMPLES,
             "feature_indices": active_feature_indices.tolist(),
             "feature_names": active_feature_names,
@@ -778,6 +795,9 @@ def run_one_step_study(
             {
                 "best_validation_loss": float(best_loss),
                 "displacement_residual_trust": float(residual_trust),
+                "validation_selected_displacement_residual_trust": float(
+                    validation_selected_residual_trust
+                ),
                 "prediction_mode": "one-step measured feedback, not autonomous",
                 "feature_count": len(active_feature_names),
                 "feature_indices": active_feature_indices.tolist(),

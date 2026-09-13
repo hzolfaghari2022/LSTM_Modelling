@@ -10,6 +10,12 @@ the one-step displacement-residual LSTM. The Lorentz-force prediction remains
 the unchanged separate causal force rule, so this ablation directly tests the
 displacement LSTM only.
 
+For this ablation study, every case uses the raw trained LSTM correction with
+the correction trust fixed to 1.0. This prevents the production safety fallback
+from shrinking the correction to zero and accidentally hiding differences among
+feature sets. The ordinary V15 `main.py` behavior outside this ablation package
+is unchanged.
+
 ## Folder structure
 
 ```text
@@ -115,11 +121,26 @@ ComparisonResults\COMPARISON_REPORT.txt
 ComparisonFigures\01_all_13_models_accuracy.png
 ComparisonFigures\02_training_validation_error_vs_features.png
 ComparisonFigures\03_feature_retention_matrix.png
+ComparisonFigures\04_prediction_difference_audit.png
 ```
 
 The comparison selects the best case by **validation displacement RMSE**.
 Pure-test values confirm the already selected result and are not used to choose
 the feature count.
+
+The comparison CSV also records the actual LSTM input dimension, both trust
+values, and the numerical difference between each reduced model's displacement
+prediction and the complete 13-feature model. This is an execution audit: it
+shows whether the feature removal actually changed the prediction.
+
+## Why results can still be close
+
+More features do not automatically produce better accuracy. Some features can
+be redundant, noisy, or learnable from the retained history. In addition, all
+cases use the same strong causal one-step displacement baseline based on recent
+measured displacement. Therefore, final displacement metrics may remain close.
+Force metrics are expected to be identical because force is not predicted by
+this LSTM and its causal rule is intentionally unchanged.
 
 ## Notes
 

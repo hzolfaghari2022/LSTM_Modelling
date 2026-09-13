@@ -54,6 +54,18 @@ def _write_case_summary(case_folder, active_indices, removed_names):
     pure = _summary_row(pooled_path, "Pure test", "Displacement")
     validation_force = _summary_row(pooled_path, "Validation", "Lorentz force")
     pure_force = _summary_row(pooled_path, "Pure test", "Lorentz force")
+    with open(
+        case_folder / "ResultsData" / "one_step_plot_metadata.json",
+        "r",
+        encoding="utf-8",
+    ) as handle:
+        metadata = json.load(handle)
+
+    if int(metadata["feature_count"]) != len(active_indices):
+        raise RuntimeError(
+            "Ablation audit failed: saved model feature count does not match "
+            "the requested case."
+        )
 
     active_names = [ONE_STEP_FEATURE_NAMES[index] for index in active_indices]
     summary = {
@@ -63,6 +75,11 @@ def _write_case_summary(case_folder, active_indices, removed_names):
         "active_feature_indices": json.dumps(active_indices),
         "active_features": "; ".join(active_names),
         "removed_features": "; ".join(removed_names) if removed_names else "None",
+        "actual_lstm_input_features": int(metadata["feature_count"]),
+        "residual_trust_used": float(metadata["displacement_residual_trust"]),
+        "validation_selected_residual_trust": float(
+            metadata["validation_selected_displacement_residual_trust"]
+        ),
         "validation_displacement_RMSE": float(validation["RMSE"]),
         "validation_displacement_MAE": float(validation["MAE"]),
         "validation_displacement_R2": float(validation["R2"]),
@@ -128,6 +145,23 @@ def run_case(feature_count, case_folder):
     figures_folder = case_folder / "FiguresResults"
     results_folder.mkdir(parents=True, exist_ok=True)
     figures_folder.mkdir(parents=True, exist_ok=True)
+    # Remove only generated case outputs so a failed rerun cannot be mistaken
+    # for a newly completed ablation case.
+    for generated_name in (
+        "ablation_case_summary.csv",
+        "one_step_metrics.csv",
+        "one_step_pooled_role_metrics.csv",
+        "one_step_training_history.csv",
+        "one_step_plot_metadata.json",
+        "one_step_lstm.pt",
+    ):
+        generated_path = results_folder / generated_name
+        if generated_path.exists():
+            generated_path.unlink()
+    prediction_folder = results_folder / "one_step_predictions"
+    if prediction_folder.exists():
+        for old_prediction in prediction_folder.glob("*.csv"):
+            old_prediction.unlink()
     for old_figure in figures_folder.glob("*.png"):
         old_figure.unlink()
 
@@ -158,6 +192,10 @@ def run_case(feature_count, case_folder):
     else:
         print("  None (complete model)")
     print("=" * 88)
+    print(
+        f"AUDIT: LSTM input size={len(active_indices)}; "
+        f"trainable parameters={_parameter_count(len(active_indices)):,}"
+    )
 
     print("\nLoading every measured record ...", flush=True)
     data = prepare_data(project_root)
@@ -188,6 +226,11 @@ def run_case(feature_count, case_folder):
         results_folder,
         figures_folder,
         feature_indices=active_indices,
+        # The production model may shrink an unhelpful residual correction
+        # toward zero. That safety mechanism can make different feature sets
+        # look identical. For a feature-sensitivity experiment, evaluate the
+        # actual LSTM correction consistently in every case.
+        residual_trust_override=1.0,
     )
     # The regular plot pipeline uses the complete-model label by default;
     # overwrite Figure 19 with the correct retained-feature count for this case.

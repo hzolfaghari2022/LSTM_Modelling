@@ -19,4 +19,6 @@ Scientific interpretation:
 - The best feature count is selected from validation displacement RMSE, not from pure-test results.
 - Pure tests are shown only to confirm the already selected model.
 - These are cumulative removals in one declared order; they do not prove that an individually removed feature is universally unimportant.
-- The LSTM feature ablation affects displacement prediction only. Lorentz force is produced by the unchanged separate causal force rule, so its metrics should remain essentially identical across cases.
+- The LSTM feature ablation affects displacement prediction only. Lorentz force is produced by the unchanged separate causal force rule, so its metrics must remain identical across cases.
+- The prediction-difference audit confirms that feature removal changed the displacement predictions.
+- More features are not guaranteed to improve validation accuracy; redundant or noisy features can have little effect or reduce accuracy.
