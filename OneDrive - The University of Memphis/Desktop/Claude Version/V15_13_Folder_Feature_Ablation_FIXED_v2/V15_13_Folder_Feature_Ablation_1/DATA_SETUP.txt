@@ -1,0 +1,28 @@
+ONE SHARED WORKBOOK FOR ALL 13 MODELS
+=====================================
+
+The code package does not contain your measured workbook.
+
+Option 1 (simplest)
+-------------------
+Copy your original, unchanged file named exactly Total_Data.xlsx into this
+top-level folder, beside main.py. Then run:
+
+    python main.py
+
+Option 2 (leave the workbook where it is)
+------------------------------------------
+Run the top-level main.py and give the full workbook path:
+
+    python main.py --data "C:\full\path\Total_Data.xlsx"
+
+Check the path without training:
+
+    python main.py --data "C:\full\path\Total_Data.xlsx" --check-data
+
+Do not place 13 copies of the workbook inside the model folders. The top-level
+runner passes the same verified workbook to every model automatically.
+
+The optional independent workbook can be supplied with:
+
+    python main.py --data "C:\full\path\Total_Data.xlsx" --independent-data "C:\full\path\Test_idpd.xlsx"
